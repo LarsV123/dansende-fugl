@@ -29,7 +29,6 @@ def chunker(seq, size):
 
 def insert_with_progress(df, table: str):
     # from https://stackoverflow.com/a/39495229
-
     connection = sqlite3.connect(database)
     chunksize = int(len(df) / 100)  # 1%
     with tqdm(total=len(df)) as pbar:
@@ -96,7 +95,6 @@ def sample(table, count):
 @click.option("--user", help="User to fetch data about")
 def get_user(table, user):
     connection = sqlite3.connect(database)
-    cursor = connection.cursor()
     rows = get_user_data(connection, table, user)
     for row in rows:
         print(row)
