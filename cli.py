@@ -5,6 +5,8 @@ from rich import print
 from tqdm import tqdm
 from queries import get_user_data
 
+from queries import get_user_data
+
 database = "data.db"
 tables = ["typed_posts", "typed_comments", "mbti9k_comments"]
 
