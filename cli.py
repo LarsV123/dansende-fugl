@@ -1,4 +1,3 @@
-from email.policy import default
 from rich import print
 from tqdm import tqdm
 import click
@@ -74,6 +73,8 @@ def init():
 @click.option("--count", default=2, help="Number of rows to fetch")
 @click.option("--table", type=click.Choice(tables), help="Table to sample")
 def sample(table, count):
+    connection = sqlite3.connect(database)
+    cursor = connection.cursor()
     query = f"""
     --sql
     SELECT * FROM {table}
@@ -94,6 +95,8 @@ def sample(table, count):
 )
 @click.option("--user", help="User to fetch data about")
 def get_user(table, user):
+    connection = sqlite3.connect(database)
+    cursor = connection.cursor()
     rows = get_user_data(connection, table, user)
     for row in rows:
         print(row)
