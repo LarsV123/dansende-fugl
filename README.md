@@ -6,6 +6,7 @@ TMA4851 - Repo for EiT group "Dansende Fugl"
 
 - Lars-Olav Vågene
 - Sander Francis
+- Torje Nysæther
 
 ## Setup
 
