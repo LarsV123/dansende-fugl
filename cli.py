@@ -1,8 +1,11 @@
+from email.policy import default
 from rich import print
 from tqdm import tqdm
 import click
 import pandas as pd
 import sqlite3
+
+from queries import get_user_data
 
 database = "data.db"
 tables = ["typed_posts", "typed_comments", "mbti9k_comments"]
@@ -78,6 +81,20 @@ def sample(table, count):
     ;
     """
     rows = cursor.execute(query).fetchall()
+    for row in rows:
+        print(row)
+
+
+@cli.command()
+@click.option(
+    "--table",
+    type=click.Choice(tables),
+    default="mbti9k_comments",
+    help="Table to fetch from",
+)
+@click.option("--user", help="User to fetch data about")
+def get_user(table, user):
+    rows = get_user_data(connection, table, user)
     for row in rows:
         print(row)
 
