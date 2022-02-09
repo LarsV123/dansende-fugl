@@ -26,4 +26,5 @@ pip install -r requirements.txt
 
 Recommended steps:
 
-- Set up your IDE to automatically reformat files with Black (or run `black .` manually before committing)
+- Set up your IDE to automatically reformat files with Black (or run `black .` manually before committing).
+- Download dataset and add it to the `/data` folder.
