@@ -1,3 +1,9 @@
+# Local config/environment files
 venv
-data
 .idea/
+
+# Dataset
+data
+
+# SQLite files
+*.db
