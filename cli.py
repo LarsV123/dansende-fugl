@@ -1,9 +1,8 @@
-from rich import print
-from tqdm import tqdm
 import click
 import pandas as pd
 import sqlite3
-
+from rich import print
+from tqdm import tqdm
 from queries import get_user_data
 
 database = "data.db"
@@ -29,8 +28,9 @@ def chunker(seq, size):
 
 
 def insert_with_progress(df, table: str):
-    connection = sqlite3.connect(database)
     # from https://stackoverflow.com/a/39495229
+
+    connection = sqlite3.connect(database)
     chunksize = int(len(df) / 100)  # 1%
     with tqdm(total=len(df)) as pbar:
         for i, cdf in enumerate(chunker(df, chunksize)):
