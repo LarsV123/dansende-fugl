@@ -53,6 +53,46 @@ def drop_table(table: str):
     connection.close()
 
 
+def execute_script(filename):
+    """
+    Read and execute a script stored as a .sql file.
+    """
+    connection = sqlite3.connect(database)
+    cursor = connection.cursor()
+
+    # Open and read the file as a single buffer
+    print(f"Executing script: {filename}")
+    file = open(filename, "r")
+
+    # Read lines and strip line breaks
+    lines = [x.strip().replace("\n", "") for x in file.read().split(";")]
+
+    # Remove empty lines
+    sql = [x for x in lines if x]
+    file.close()
+
+    # Execute every command from the input file
+    for command in sql:
+        print()
+        # This will skip and report errors
+        try:
+            print("Executing command:")
+            print(command)
+            cursor.execute(command)
+        except Exception as e:
+            print("Command skipped: ", command)
+            print("Error:", e)
+    connection.close()
+
+
+@cli.command()
+def index():
+    print("Creating indexes...")
+    execute_script("create_indexes.sql")
+    
+    print()
+    print("Finished creating indexes!")
+
 @cli.command()
 def init():
     folder = "./data"
