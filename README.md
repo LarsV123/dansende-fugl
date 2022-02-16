@@ -40,6 +40,9 @@ as inserting the dataset(s) into an SQLite database. Example commands:
 # Load all datasets
 python cli.py init
 
+# Create indexes
+python cli.py index
+
 # Check that the data has been loaded
 python cli.py sample --table typed_posts
 
