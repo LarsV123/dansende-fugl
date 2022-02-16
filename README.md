@@ -8,6 +8,7 @@ TMA4851 - Repo for EiT group "Dansende Fugl"
 - Sander Francis
 - Ingvild Devold
 - Torje Nysæther
+- Mihajlo Krivokapic
 
 ## Setup
 
