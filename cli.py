@@ -1,4 +1,5 @@
 import click
+import os
 import pandas as pd
 import sqlite3
 from rich import print
@@ -9,6 +10,7 @@ from queries import get_user_data
 
 database = "data.db"
 tables = ["typed_posts", "typed_comments", "mbti9k_comments"]
+data_folder = "./data"
 
 
 @click.group()
@@ -95,19 +97,21 @@ def index():
 
 @cli.command()
 def init():
-    folder = "./data"
-    for table in tables:
-        path = f"{folder}/{table}.csv"
-        print(f"Loading dataset: {path}")
-        df = pd.read_csv(path)
+    for (root, dirs, files) in os.walk(data_folder, topdown=True):
+        print(files)
+        for fn in files:
+            table = fn.split(".")[0]
+            path = f"{data_folder}/{fn}"
+            print(f"Loading dataset: {path}")
+            df = pd.read_csv(path)
 
-        drop_table(table)
-        print(f"Writing dataset to table {table} in {database}")
+            drop_table(table)
+            print(f"Writing dataset to table {table} in {database}")
 
-        insert_with_progress(df, table)
-        print()
+            insert_with_progress(df, table)
+            print()
 
-    print(f"Successfully loaded {len(tables)} files into SQLite")
+    print(f"Successfully loaded {len(files)} files into SQLite")
 
 
 @cli.command()
