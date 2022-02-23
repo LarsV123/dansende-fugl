@@ -1,11 +1,11 @@
 import sqlite3
 import time
 import nltk
+from nltk import ToktokTokenizer
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 import numpy as np
 import tensorflow as tf
-import pandas as pd
 import re
 from keras.layers import Dense
 from keras.models import Sequential
@@ -42,44 +42,45 @@ def get_one_hot(mbti_type):
     return one_hot
 
 
-def get_typed_comments(size):
+def get_typed_comments(batch_size, n):
     connection = sqlite3.connect(database)
     cursor = connection.cursor()
     query = """
     --sql
     SELECT type, comment
-    FROM typed_comments
+    FROM mbti9k_comments
     ;
     """
     cursor.execute(query)
     comments = []
     types = []
     count = 0
-    while count < size:
-        rows = cursor.fetchmany(1000)
-        print(round(count / size, 3))
-        count += 1000
+    while count < n:
+        rows = cursor.fetchmany(batch_size)
+        print(f"{round(count * 100 / n, 2)} %")
+        count += batch_size
         if len(rows) == 0:
             break
         for type, comment in rows:
-            types.append(get_one_hot(type))
+            types.append(type)
             comments.append(comment)
-    return pd.DataFrame(
-        list(zip(np.array(types), comments)), columns=["type", "comment"]
-    )
+    return types, comments
 
 
-def get_matrix_from_text(tkz, x):
-    batch_size = 1000
+def get_matrix_from_text(tkz, x, batch_size):
     matrix = tkz.texts_to_matrix(x[0:batch_size])
     i = batch_size
-    while True:
-        try:
-            temp = tkz.texts_to_matrix(x[i : i + batch_size])
-            matrix = np.concatenate([matrix, temp])
-            i += batch_size
-        except IndexError:
-            break
+    run = True
+    while run:
+        start = i
+        end = i + batch_size
+        if end >= len(x):
+            end = len(x) - i
+            run = False
+        temp = tkz.texts_to_matrix(x[i : i + batch_size])
+        matrix = np.concatenate([matrix, temp])
+        print(f"Tokenize: {i}")
+        i += batch_size
     return matrix
 
 
@@ -92,57 +93,121 @@ def remove_stop_words(text):
     return result
 
 
-start_time = time.time()
-print("Loading data...")
-size = 100000
-df = get_typed_comments(size)
-print("Complete!")
+def pre_process(arr):
+    print("Creating tokens...")
+    toktok = ToktokTokenizer()
+    arr = [toktok.tokenize(x) for x in arr]
+    print("Done!")
+
+    print("Removing stopwords...")
+    arr = [remove_stop_words(x) for x in arr]
+    print("Done!")
+
+    print("Removing special characters...")
+    arr = [[re.sub("[^a-zA-Z0-9]+", "", x) for x in y] for y in arr]
+    arr = [[x for x in y if x != ""] for y in arr]
+    print("Done!")
+
+    # Very slow, removed for now
+    # print("Applying spellcheck...")
+    # spell = SpellChecker()
+    # arr = [[spell.correction(x) for x in y] for y in arr]
+    # print("Done!")
+
+    # Very slow, removed for now
+    # print("Applying stemming...")
+    # porter = PorterStemmer()
+    # arr = [[porter.stem(x) for x in y] for y in arr]
+    # print("Done!")
+    return arr
 
 
-# Create word tokens from each comment
-print("Creating tokens...")
-df["comment"] = df["comment"].apply(lambda x: nltk.word_tokenize(x))
-print("Complete!")
-# Remove stopwords
-print("Removing stopwords...")
-df["comment"] = df["comment"].apply(lambda text: remove_stop_words(text))
-print("Complete!")
-# Remove special characters
-print("Removing special characters...")
-df["comment"] = df["comment"].apply(
-    lambda text: [re.sub("[^a-zA-Z0-9]+", "", _) for _ in text]
-)
-# Apply spell checking (Removed for now, way too slow)
-# print("Applying spellcheck...")
-# spell = SpellChecker()
-# df["comment"] = df["comment"].apply(lambda text: [spell.correction(word) for word in text])
-# print("Complete!")
-# Stemming
-# print("Applying stemming...")
-# porter = PorterStemmer()
-# df["comment"] = df["comment"].apply(lambda text: [porter.stem(word) for word in text])
-# print("Complete!")
+def train_in_batch(model, tkz, x, y, batch_size, tb=None):
+    count = 0
+    run = False
+    while run:
+        start = count
+        end = count + batch_size
+        if end >= len(x):
+            end = len(x)
+            run = False
+        train_x = np.asarray(tkz.texts_to_matrix(x[start:end])).astype(np.float32)
+        if tb:
+            model.fit(train_x, y[start:end], callbacks=tb)
+        else:
+            model.fit(train_x, y[start:end])
+        count += batch_size
+    return model
 
-tokenizer = tf.keras.preprocessing.text.Tokenizer()
-tokenizer.fit_on_texts(df["comment"])
-train_x = np.asarray(
-    get_matrix_from_text(tokenizer, df["comment"][: int(0.8 * size)])
-).astype(np.float32)
-train_y = np.stack(df["type"][0 : int(0.8 * size)])
-test_x = np.asarray(
-    get_matrix_from_text(tokenizer, df["comment"][int(0.8 * size) :])
-).astype(np.float32)
-test_y = np.stack(df["type"][int(0.8 * size) :])
-model = Sequential()
-model.add(Dense(32, activation="relu"))
-model.add(Dense(32, activation="relu"))
-model.add(Dense(32, activation="relu"))
-model.add(Dense(32, activation="relu"))
-model.add(Dense(32, activation="relu"))
-model.add(Dense(16, activation="softmax"))
-model.compile(
-    loss="categorical_crossentropy", optimizer="adam", metrics=["categorical_accuracy"]
-)
-model.fit(train_x, train_y)
-model.evaluate(test_x, test_y)
-print("--- %s seconds ---" % (time.time() - start_time))
+
+def evaluate_in_batch(model, tkz, x, y, batch_size):
+    count = 0
+    run = True
+    print("Evaluation on test: ")
+    while run:
+        start = count
+        end = count + batch_size
+        if end >= len(x):
+            end = len(x)
+            run = False
+        test_x = np.asarray(tkz.texts_to_matrix(x[start:end])).astype(np.float32)
+        model.evaluate(test_x, y[start:end])
+        count += batch_size
+    return model
+
+
+if __name__ == "__main__":
+    start_time = time.time()
+    size = 1000
+    load_from_file = False
+    print("Loading data...")
+    if load_from_file:
+        # Load from compressed file
+        comments = np.load("processed_comments.npz", allow_pickle=True)["arr_0"]
+        types = np.load("types.npz", allow_pickle=True)["arr_0"]
+    else:
+        types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
+        comments = pre_process(comments)
+        # Save to compressed file
+        np.savez_compressed("processed_comments.npz", np.asarray(comments))
+        np.savez_compressed("types.npz", np.asarray(types))
+    print("Done!")
+
+    train_comments = np.asarray(comments[: int(0.8 * size)])
+    train_types = np.asarray(
+        [get_one_hot(author) for author in types[0 : int(0.8 * size)]]
+    )
+    test_comments = np.asarray(comments[int(0.8 * size) :])
+    test_types = np.asarray(
+        [get_one_hot(author) for author in types[int(0.8 * size) :]]
+    )
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
+    tokenizer.fit_on_texts(comments)
+
+    MODEL = Sequential()
+    MODEL.add(Dense(32, activation="relu"))
+    MODEL.add(Dense(32, activation="relu"))
+    MODEL.add(Dense(32, activation="relu"))
+    MODEL.add(Dense(32, activation="relu"))
+    MODEL.add(Dense(32, activation="relu"))
+    MODEL.add(Dense(16, activation="softmax"))
+    MODEL.compile(
+        loss="categorical_crossentropy",
+        optimizer="adam",
+        metrics=["categorical_accuracy"],
+    )
+    batch = 100
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
+    # MODEL = train_in_batch(MODEL, tokenizer, train_comments, train_types, batch, tensorboard_callback)
+    # MODEL = evaluate_in_batch(MODEL, tokenizer, test_comments, test_types, batch)
+    MODEL.fit(
+        np.asarray(tokenizer.texts_to_matrix(train_comments)).astype(np.float32),
+        train_types,
+        batch_size=8,
+        epochs=5,
+    )
+    MODEL.evaluate(
+        np.asarray(tokenizer.texts_to_matrix(test_comments)).astype(np.float32),
+        test_types,
+    )
+    print("--- %s seconds ---" % (time.time() - start_time))
