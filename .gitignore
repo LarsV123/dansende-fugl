@@ -8,5 +8,8 @@ data
 # SQLite files
 *.db
 
+# Tensorflow files
+logs
+
 # Ignore Mac DS_Store files
 .DS_Store
