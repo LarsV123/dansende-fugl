@@ -110,6 +110,27 @@ def index():
     print("Finished creating indexes!")
 
 @cli.command()
+def aggregate():
+    """
+    Create all aggregation tables using stored SQL scripts.
+    """
+    connection = sqlite3.connect(database)
+    cursor = connection.cursor()
+    folder = "./scripts/tables"
+
+    print(f"Running all aggregation scripts in {folder}")
+    print("This could take some time, please be patient...")
+    for (root, dirs, files) in os.walk(folder, topdown=True):
+        for filename in files:
+            path = f"{folder}/{filename}"
+            with open(path) as script:
+                print(f"Executing script {filename}")
+                cursor.executescript(script.read())
+    
+    print()
+    print("Finished creating aggregation tables!")
+
+@cli.command()
 def init():
     for (root, dirs, files) in os.walk(data_folder, topdown=True):
         print(files)
