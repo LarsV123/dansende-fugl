@@ -97,7 +97,8 @@ def index():
     cursor = connection.cursor()
     folder = "./scripts/indexes"
 
-    print(f"Running all scripts in {folder}")
+    print(f"Running all indexing scripts in {folder}")
+    print("This could take some time (10-20 minutes), please be patient...")
     for (root, dirs, files) in os.walk(folder, topdown=True):
         for filename in files:
             path = f"{folder}/{filename}"
