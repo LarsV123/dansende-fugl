@@ -57,7 +57,8 @@ def drop_table(table: str):
 
 def execute_script(filename):
     """
-    Read and execute a script stored as a .sql file.
+    Read and execute line by line a script stored as a .sql file.
+    For executing the entire script in one go, use cursor.executescript()
     """
     connection = sqlite3.connect(database)
     cursor = connection.cursor()
@@ -89,8 +90,20 @@ def execute_script(filename):
 
 @cli.command()
 def index():
-    print("Creating indexes...")
-    execute_script("create_indexes.sql")
+    """
+    Create all relevant indexes using stored SQL scripts.
+    """
+    connection = sqlite3.connect(database)
+    cursor = connection.cursor()
+    folder = "./scripts/indexes"
+
+    print(f"Running all scripts in {folder}")
+    for (root, dirs, files) in os.walk(folder, topdown=True):
+        for filename in files:
+            path = f"{folder}/{filename}"
+            with open(path) as script:
+                print(f"Executing script {filename}")
+                cursor.executescript(script.read())
     
     print()
     print("Finished creating indexes!")
