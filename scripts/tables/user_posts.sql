@@ -1,12 +1,17 @@
 -- Create aggregation table of posts summarized per user
-DROP TABLE IF EXISTS user_post_summary;
-
-CREATE TABLE user_post_summary AS
-SELECT author, type, SUM(score) AS score, SUM(num_comments) AS num_comments, COUNT(*) AS post_count
+CREATE TABLE IF NOT EXISTS user_posts AS
+SELECT 
+  author, 
+  type, 
+  COUNT(*) AS post_count,
+  SUM(score) AS total_post_score, 
+  SUM(num_comments) AS total_comments_received
 FROM typed_posts
 WHERE author IS NOT NULL
 GROUP BY author;
 
-CREATE UNIQUE INDEX IF NOT EXISTS user_post_summary_author ON user_post_summary(author);
-CREATE INDEX IF NOT EXISTS user_post_summary_type ON user_post_summary(type);
-CREATE INDEX IF NOT EXISTS user_post_summary_post_count ON user_post_summary(post_count);
+CREATE UNIQUE INDEX IF NOT EXISTS user_posts_author ON user_posts(author);
+CREATE INDEX IF NOT EXISTS user_posts_type ON user_posts(type);
+CREATE INDEX IF NOT EXISTS user_posts_post_count ON user_posts(post_count);
+CREATE INDEX IF NOT EXISTS user_posts_total_post_score ON user_posts(total_post_score);
+CREATE INDEX IF NOT EXISTS user_posts_total_comments_received ON user_posts(total_comments_received);
