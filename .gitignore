@@ -15,3 +15,6 @@ data
 
 # Environment variables (secrets)
 .env
+
+# Tensorflow files
+logs
