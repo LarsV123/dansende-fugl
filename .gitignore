@@ -4,6 +4,7 @@ venv
 
 # Dataset
 data
+processed
 
 # SQLite files
 *.db
