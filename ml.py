@@ -7,7 +7,7 @@ from nltk.stem import PorterStemmer
 import numpy as np
 import tensorflow as tf
 import re
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 from keras.models import Sequential
 from spellchecker import SpellChecker
 
@@ -77,7 +77,7 @@ def get_matrix_from_text(tkz, x, batch_size):
         if end >= len(x):
             end = len(x) - i
             run = False
-        temp = tkz.texts_to_matrix(x[i : i + batch_size])
+        temp = tkz.texts_to_matrix(x[i: i + batch_size])
         matrix = np.concatenate([matrix, temp])
         print(f"Tokenize: {i}")
         i += batch_size
@@ -85,41 +85,47 @@ def get_matrix_from_text(tkz, x, batch_size):
 
 
 def remove_stop_words(text):
-    result = []
     en_stopwords = stopwords.words("english")
-    for token in text:
-        if token not in en_stopwords:
-            result.append(token)
-    return result
+    return [token for token in text if token not in en_stopwords]
 
 
-def pre_process(arr):
-    print("Creating tokens...")
-    toktok = ToktokTokenizer()
-    arr = [toktok.tokenize(x) for x in arr]
-    print("Done!")
+def pre_process_batch(arr, batch_size):
+    count = 0
+    idx = 0
+    run = True
+    while run:
+        print(f'Processing batch {idx}')
+        start = count
+        end = count + batch_size
+        if end >= len(arr):
+            end = len(arr)
+            run = False
+        curr_arr = arr[start:end]
+        print("Creating tokens...")
+        toktok = ToktokTokenizer()
+        curr_arr = [toktok.tokenize(x) for x in curr_arr]
 
-    print("Removing stopwords...")
-    arr = [remove_stop_words(x) for x in arr]
-    print("Done!")
+        print("Removing stopwords...")
+        curr_arr = [remove_stop_words(x) for x in curr_arr]
 
-    print("Removing special characters...")
-    arr = [[re.sub("[^a-zA-Z0-9]+", "", x) for x in y] for y in arr]
-    arr = [[x for x in y if x != ""] for y in arr]
-    print("Done!")
+        print("Removing special characters...")
+        curr_arr = [[re.sub("[^a-zA-Z0-9]+", "", x) for x in y] for y in curr_arr]
+        curr_arr = [[x for x in y if x != ""] for y in curr_arr]
 
-    # Very slow, removed for now
-    # print("Applying spellcheck...")
-    # spell = SpellChecker()
-    # arr = [[spell.correction(x) for x in y] for y in arr]
-    # print("Done!")
+        # Very slow, removed for now
+        # print("Applying spellcheck...")
+        # spell = SpellChecker()
+        # arr = [[spell.correction(x) for x in y] for y in curr_arr]
 
-    # Very slow, removed for now
-    # print("Applying stemming...")
-    # porter = PorterStemmer()
-    # arr = [[porter.stem(x) for x in y] for y in arr]
-    # print("Done!")
-    return arr
+        # print("Applying stemming...")
+        # porter = PorterStemmer()
+        # arr = [[porter.stem(x) for x in y] for y in curr_arr]
+
+        # Save to compressed file
+        np.savez_compressed(f'./processed/comments_{idx}', np.asarray(curr_arr))
+        idx += 1
+        count += batch_size
+    return
 
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
@@ -158,38 +164,41 @@ def evaluate_in_batch(model, tkz, x, y, batch_size):
 
 if __name__ == "__main__":
     start_time = time.time()
-    size = 1000
-    load_from_file = False
+    size = 9252
+    preprocess_data = False
     print("Loading data...")
-    if load_from_file:
-        # Load from compressed file
-        comments = np.load("processed_comments.npz", allow_pickle=True)["arr_0"]
-        types = np.load("types.npz", allow_pickle=True)["arr_0"]
-    else:
+    if preprocess_data:
         types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
-        comments = pre_process(comments)
-        # Save to compressed file
-        np.savez_compressed("processed_comments.npz", np.asarray(comments))
-        np.savez_compressed("types.npz", np.asarray(types))
+        pre_process_batch(comments, int(len(comments) / 10))
+        np.savez_compressed("./processed/types.npz", np.asarray(types))
+    comments = []
+    i = 0
+    while True:
+        try:
+            temp = np.load(f'./processed/comments_{i}.npz', allow_pickle=True)["arr_0"]
+            comments.append(temp)
+            i += 1
+        except FileNotFoundError:
+            break
+    types = np.load(f'./processed/types.npz', allow_pickle=True)["arr_0"]
+    comments = np.hstack(np.asarray(comments))
     print("Done!")
 
-    train_comments = np.asarray(comments[: int(0.8 * size)])
+    train_comments = comments[: int(0.8 * size)]
     train_types = np.asarray(
-        [get_one_hot(author) for author in types[0 : int(0.8 * size)]]
+        [get_one_hot(author) for author in types[0: int(0.8 * size)]]
     )
-    test_comments = np.asarray(comments[int(0.8 * size) :])
+    test_comments = comments[int(0.8 * size):]
     test_types = np.asarray(
-        [get_one_hot(author) for author in types[int(0.8 * size) :]]
+        [get_one_hot(author) for author in types[int(0.8 * size):]]
     )
     tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
     tokenizer.fit_on_texts(comments)
 
     MODEL = Sequential()
-    MODEL.add(Dense(32, activation="relu"))
-    MODEL.add(Dense(32, activation="relu"))
-    MODEL.add(Dense(32, activation="relu"))
-    MODEL.add(Dense(32, activation="relu"))
-    MODEL.add(Dense(32, activation="relu"))
+    for i in range(4):
+        MODEL.add(Dense(64, activation="relu"))
+        MODEL.add(Dropout(0.2))
     MODEL.add(Dense(16, activation="softmax"))
     MODEL.compile(
         loss="categorical_crossentropy",
@@ -206,6 +215,7 @@ if __name__ == "__main__":
         batch_size=8,
         epochs=5,
     )
+    print("--- Evaluate ---")
     MODEL.evaluate(
         np.asarray(tokenizer.texts_to_matrix(test_comments)).astype(np.float32),
         test_types,
