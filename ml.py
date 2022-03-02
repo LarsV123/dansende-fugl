@@ -89,10 +89,11 @@ def remove_stop_words(text):
     return [token for token in text if token not in en_stopwords]
 
 
-def pre_process_batch(arr, batch_size):
+def pre_process_batch(arr, batch_size, folder):
     count = 0
     idx = 0
     run = True
+    comments = []
     while run:
         print(f'Processing batch {idx}')
         start = count
@@ -109,7 +110,7 @@ def pre_process_batch(arr, batch_size):
         curr_arr = [remove_stop_words(x) for x in curr_arr]
 
         print("Removing special characters...")
-        curr_arr = [[re.sub("[^a-zA-Z0-9]+", "", x) for x in y] for y in curr_arr]
+        curr_arr = [[re.sub("[^a-zA-Z0-9!?]+", "", x) for x in y] for y in curr_arr]
         curr_arr = [[x for x in y if x != ""] for y in curr_arr]
 
         # Very slow, removed for now
@@ -117,15 +118,16 @@ def pre_process_batch(arr, batch_size):
         # spell = SpellChecker()
         # arr = [[spell.correction(x) for x in y] for y in curr_arr]
 
+        # Also very slow, removed for now
         # print("Applying stemming...")
         # porter = PorterStemmer()
         # arr = [[porter.stem(x) for x in y] for y in curr_arr]
 
         # Save to compressed file
-        np.savez_compressed(f'./processed/comments_{idx}', np.asarray(curr_arr))
+        np.savez_compressed(f'./data/{folder}/comments_{idx}', np.asarray(curr_arr))
+        comments.append(curr_arr)
         idx += 1
         count += batch_size
-    return
 
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
@@ -162,45 +164,76 @@ def evaluate_in_batch(model, tkz, x, y, batch_size):
     return model
 
 
-if __name__ == "__main__":
-    start_time = time.time()
-    size = 9252
-    preprocess_data = False
-    print("Loading data...")
-    if preprocess_data:
-        types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
-        pre_process_batch(comments, int(len(comments) / 10))
-        np.savez_compressed("./processed/types.npz", np.asarray(types))
-    comments = []
-    i = 0
-    while True:
-        try:
-            temp = np.load(f'./processed/comments_{i}.npz', allow_pickle=True)["arr_0"]
-            comments.append(temp)
-            i += 1
-        except FileNotFoundError:
-            break
-    types = np.load(f'./processed/types.npz', allow_pickle=True)["arr_0"]
-    comments = np.hstack(np.asarray(comments))
-    print("Done!")
+def get_individual_class(mbti_type):
+    individual_class = {"i": 0, "e": 1, "s": 0, "n": 1, "f": 0, "t": 1, "j": 0, "p": 1}
+    classification = []
+    for char in mbti_type:
+        classification.append(individual_class[char])
+    return classification
 
-    train_comments = comments[: int(0.8 * size)]
+
+def train_individual_axis(comments, types, tokenizer):
+    train_idx = [_ for _ in range(int(0.8 * size))]
+    train_comments = np.take(comments, train_idx)
+    train_types = np.asarray(
+        [get_individual_class(author) for author in types[0: int(0.8 * size)]]
+    )
+    test_idx = [_ for _ in range(int(0.8 * size), size)]
+    test_comments = np.take(comments, test_idx)
+    test_types = np.asarray(
+        [get_individual_class(author) for author in types[int(0.8 * size):]]
+    )
+    models = []
+    for _ in range(4):
+        model = Sequential()
+        for i in range(4):
+            model.add(Dense(128, activation="relu", kernel_regularizer="L2"))
+            model.add(Dropout(0.4))
+        model.add(Dense(1, activation="sigmoid"))
+        model.compile(
+            loss="binary_crossentropy",
+            optimizer="adam",
+            metrics=["accuracy"],
+        )
+        models.append(model)
+    dimensions = ["I/E", "S/N", "F/T", "J/P"]
+    model_input = np.asarray(tokenizer.texts_to_matrix(train_comments, mode="tfidf")).astype(np.float32)
+    for _ in range(len(models)):
+        print(f'Training on dimension: {dimensions[_]}')
+        models[_].fit(
+            model_input,
+            train_types[:, _],
+            batch_size=32,
+            epochs=10,
+            validation_split=0.2,
+        )
+    predict(models, np.asarray(tokenizer.texts_to_matrix(test_comments[0], mode="tfidf")).astype(np.float32),
+            test_types[0])
+    return models
+
+def predict(models, x, y):
+    pred_type = y
+    for model in models:
+        temp = model(x)
+    return
+
+def train_full_type(comments, types, tokenizer):
+    train_idx = [_ for _ in range(int(0.8 * size))]
+    train_comments = np.take(comments, train_idx)
     train_types = np.asarray(
         [get_one_hot(author) for author in types[0: int(0.8 * size)]]
     )
-    test_comments = comments[int(0.8 * size):]
+    test_idx = [_ for _ in range(int(0.8 * size), size)]
+    test_comments = np.take(comments, test_idx)
     test_types = np.asarray(
         [get_one_hot(author) for author in types[int(0.8 * size):]]
     )
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
-    tokenizer.fit_on_texts(comments)
-
-    MODEL = Sequential()
+    model = Sequential()
     for i in range(4):
-        MODEL.add(Dense(64, activation="relu"))
-        MODEL.add(Dropout(0.2))
-    MODEL.add(Dense(16, activation="softmax"))
-    MODEL.compile(
+        model.add(Dense(64, activation="relu", kernel_regularizer="L2"))
+        model.add(Dropout(0.2))
+    model.add(Dense(16, activation="softmax"))
+    model.compile(
         loss="categorical_crossentropy",
         optimizer="adam",
         metrics=["categorical_accuracy"],
@@ -209,15 +242,48 @@ if __name__ == "__main__":
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
     # MODEL = train_in_batch(MODEL, tokenizer, train_comments, train_types, batch, tensorboard_callback)
     # MODEL = evaluate_in_batch(MODEL, tokenizer, test_comments, test_types, batch)
-    MODEL.fit(
-        np.asarray(tokenizer.texts_to_matrix(train_comments)).astype(np.float32),
+    model.fit(
+        np.asarray(tokenizer.texts_to_matrix(train_comments, mode="tfidf")).astype(np.float32),
         train_types,
-        batch_size=8,
-        epochs=5,
+        batch_size=32,
+        epochs=25,
+        validation_split=0.2,
+        callbacks=tensorboard_callback
     )
-    print("--- Evaluate ---")
-    MODEL.evaluate(
-        np.asarray(tokenizer.texts_to_matrix(test_comments)).astype(np.float32),
-        test_types,
-    )
+    # print("--- Evaluate ---")
+    # MODEL.evaluate(
+    #     np.asarray(tokenizer.texts_to_matrix(test_comments)).astype(np.float32),
+    #     test_types,
+    # )
+    return model
+
+if __name__ == "__main__":
+    start_time = time.time()
+    size = 500
+    folder = "test"
+    preprocess_data = False
+    print("Loading data...")
+    if preprocess_data:
+        TYPES, COMMENTS = get_typed_comments(batch_size=int(size / 10), n=size)
+        pre_process_batch(COMMENTS, int(len(COMMENTS) / 10), folder)
+        np.savez_compressed(f'./data/{folder}/types.npz', np.asarray(TYPES))
+    COMMENTS = []
+    i = 0
+    while True:
+        try:
+            temp = np.load(f'./data/{folder}/comments_{i}.npz', allow_pickle=True)["arr_0"]
+            COMMENTS.append(temp)
+            print(f'Comment batch {i} loaded successfully!')
+            i += 1
+        except FileNotFoundError:
+            break
+    COMMENTS = np.hstack(np.asarray(COMMENTS))
+    TYPES = np.load(f'./data/{folder}/types.npz', allow_pickle=True)["arr_0"]
+    print("Done!")
+
+    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(10000)
+    TOKENIZER.fit_on_texts(COMMENTS)
+
+    MODELS = train_individual_axis(COMMENTS, TYPES, TOKENIZER)
+
     print("--- %s seconds ---" % (time.time() - start_time))
