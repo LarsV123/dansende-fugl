@@ -6,7 +6,6 @@ __pycache__
 
 # Dataset
 data
-processed
 
 # SQLite files
 *.db
