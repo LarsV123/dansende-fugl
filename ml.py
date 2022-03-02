@@ -77,7 +77,7 @@ def get_matrix_from_text(tkz, x, batch_size):
         if end >= len(x):
             end = len(x) - i
             run = False
-        temp = tkz.texts_to_matrix(x[i: i + batch_size])
+        temp = tkz.texts_to_matrix(x[i : i + batch_size])
         matrix = np.concatenate([matrix, temp])
         print(f"Tokenize: {i}")
         i += batch_size
@@ -95,7 +95,7 @@ def pre_process_batch(arr, batch_size, folder):
     run = True
     comments = []
     while run:
-        print(f'Processing batch {idx}')
+        print(f"Processing batch {idx}")
         start = count
         end = count + batch_size
         if end >= len(arr):
@@ -124,7 +124,7 @@ def pre_process_batch(arr, batch_size, folder):
         # arr = [[porter.stem(x) for x in y] for y in curr_arr]
 
         # Save to compressed file
-        np.savez_compressed(f'./data/{folder}/comments_{idx}', np.asarray(curr_arr))
+        np.savez_compressed(f"./data/{folder}/comments_{idx}", np.asarray(curr_arr))
         comments.append(curr_arr)
         idx += 1
         count += batch_size
@@ -176,12 +176,12 @@ def train_individual_axis(comments, types, tokenizer):
     train_idx = [_ for _ in range(int(0.8 * size))]
     train_comments = np.take(comments, train_idx)
     train_types = np.asarray(
-        [get_individual_class(author) for author in types[0: int(0.8 * size)]]
+        [get_individual_class(author) for author in types[0 : int(0.8 * size)]]
     )
     test_idx = [_ for _ in range(int(0.8 * size), size)]
     test_comments = np.take(comments, test_idx)
     test_types = np.asarray(
-        [get_individual_class(author) for author in types[int(0.8 * size):]]
+        [get_individual_class(author) for author in types[int(0.8 * size) :]]
     )
     models = []
     for _ in range(4):
@@ -197,9 +197,11 @@ def train_individual_axis(comments, types, tokenizer):
         )
         models.append(model)
     dimensions = ["I/E", "S/N", "F/T", "J/P"]
-    model_input = np.asarray(tokenizer.texts_to_matrix(train_comments, mode="tfidf")).astype(np.float32)
+    model_input = np.asarray(
+        tokenizer.texts_to_matrix(train_comments, mode="tfidf")
+    ).astype(np.float32)
     for _ in range(len(models)):
-        print(f'Training on dimension: {dimensions[_]}')
+        print(f"Training on dimension: {dimensions[_]}")
         models[_].fit(
             model_input,
             train_types[:, _],
@@ -207,9 +209,15 @@ def train_individual_axis(comments, types, tokenizer):
             epochs=10,
             validation_split=0.2,
         )
-    predict(models, np.asarray(tokenizer.texts_to_matrix(test_comments[0], mode="tfidf")).astype(np.float32),
-            test_types[0])
+    predict(
+        models,
+        np.asarray(tokenizer.texts_to_matrix(test_comments[0], mode="tfidf")).astype(
+            np.float32
+        ),
+        test_types[0],
+    )
     return models
+
 
 def predict(models, x, y):
     pred_type = y
@@ -217,16 +225,17 @@ def predict(models, x, y):
         temp = model(x)
     return
 
+
 def train_full_type(comments, types, tokenizer):
     train_idx = [_ for _ in range(int(0.8 * size))]
     train_comments = np.take(comments, train_idx)
     train_types = np.asarray(
-        [get_one_hot(author) for author in types[0: int(0.8 * size)]]
+        [get_one_hot(author) for author in types[0 : int(0.8 * size)]]
     )
     test_idx = [_ for _ in range(int(0.8 * size), size)]
     test_comments = np.take(comments, test_idx)
     test_types = np.asarray(
-        [get_one_hot(author) for author in types[int(0.8 * size):]]
+        [get_one_hot(author) for author in types[int(0.8 * size) :]]
     )
     model = Sequential()
     for i in range(4):
@@ -243,12 +252,14 @@ def train_full_type(comments, types, tokenizer):
     # MODEL = train_in_batch(MODEL, tokenizer, train_comments, train_types, batch, tensorboard_callback)
     # MODEL = evaluate_in_batch(MODEL, tokenizer, test_comments, test_types, batch)
     model.fit(
-        np.asarray(tokenizer.texts_to_matrix(train_comments, mode="tfidf")).astype(np.float32),
+        np.asarray(tokenizer.texts_to_matrix(train_comments, mode="tfidf")).astype(
+            np.float32
+        ),
         train_types,
         batch_size=32,
         epochs=25,
         validation_split=0.2,
-        callbacks=tensorboard_callback
+        callbacks=tensorboard_callback,
     )
     # print("--- Evaluate ---")
     # MODEL.evaluate(
@@ -256,6 +267,7 @@ def train_full_type(comments, types, tokenizer):
     #     test_types,
     # )
     return model
+
 
 if __name__ == "__main__":
     start_time = time.time()
@@ -266,19 +278,21 @@ if __name__ == "__main__":
     if preprocess_data:
         TYPES, COMMENTS = get_typed_comments(batch_size=int(size / 10), n=size)
         pre_process_batch(COMMENTS, int(len(COMMENTS) / 10), folder)
-        np.savez_compressed(f'./data/{folder}/types.npz', np.asarray(TYPES))
+        np.savez_compressed(f"./data/{folder}/types.npz", np.asarray(TYPES))
     COMMENTS = []
     i = 0
     while True:
         try:
-            temp = np.load(f'./data/{folder}/comments_{i}.npz', allow_pickle=True)["arr_0"]
+            temp = np.load(f"./data/{folder}/comments_{i}.npz", allow_pickle=True)[
+                "arr_0"
+            ]
             COMMENTS.append(temp)
-            print(f'Comment batch {i} loaded successfully!')
+            print(f"Comment batch {i} loaded successfully!")
             i += 1
         except FileNotFoundError:
             break
     COMMENTS = np.hstack(np.asarray(COMMENTS))
-    TYPES = np.load(f'./data/{folder}/types.npz', allow_pickle=True)["arr_0"]
+    TYPES = np.load(f"./data/{folder}/types.npz", allow_pickle=True)["arr_0"]
     print("Done!")
 
     TOKENIZER = tf.keras.preprocessing.text.Tokenizer(10000)
