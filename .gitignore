@@ -1,6 +1,8 @@
 # Local config/environment files
 venv
 .idea/
+__pycache__
+*.prof
 
 # Dataset
 data
@@ -10,3 +12,6 @@ data
 
 # Ignore Mac DS_Store files
 .DS_Store
+
+# Environment variables (secrets)
+.env
