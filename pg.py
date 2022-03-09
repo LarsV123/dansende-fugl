@@ -11,7 +11,13 @@ from utils import time_this
 from dotenv import load_dotenv, find_dotenv
 
 
+# Load database credentials into environment variables
 load_dotenv(find_dotenv())
+
+# Increase max field size to handle huge text fields in CSV files
+csv.field_size_limit(0x2000000)
+
+# Paths to all .CSV and .SQL files
 scripts = {
     "typed_posts": {
         "data": "data/typed_posts.csv",
@@ -25,6 +31,11 @@ scripts = {
         "index": "schema/typed_comments_indexes.sql",
         "view": "schema/view_comments.sql",
     },
+    "mbti9k": {
+        "data": "data/mbti9k_comments.csv",
+        "schema": "schema/mbti9k.sql",
+        "index": "schema/mbti9k_indexes.sql"
+    }
 }
 
 
@@ -118,21 +129,28 @@ class Connector:
             self.execute_script(scripts[table]["schema"])
             self.connection.commit()
 
-            datapath = scripts[table]["data"]
+            if table not in scripts:
+                raise ValueError
+
             if table == "typed_posts":
-                insert_posts(self, datapath)
+                insert_posts(self, table)
             elif table == "typed_comments":
-                insert_comments(self, datapath)
+                insert_csv(self, table, 25000)
+            elif table == "mbti9k":
+                # pass
+                insert_csv(self, table, 25)
             else:
                 raise ValueError
             print()
 
         # Safe to do this anyway
-        print(f"Creating indexes for {table}...")
-        self.execute_script(scripts[table]["index"])
+        if "index" in scripts[table]:
+            print(f"Creating indexes for {table}...")
+            self.execute_script(scripts[table]["index"])
 
-        print(f"Creating views for {table}...")
-        self.execute_script(scripts[table]["view"])
+        if "view" in scripts[table]:
+            print(f"Creating views for {table}...")
+            self.execute_script(scripts[table]["view"])
 
         self.connection.commit()
         print(f"Finished initializing {table}")
@@ -156,12 +174,11 @@ def parse_posts(path: str) -> list:
     return text
 
 
-def insert_posts(db: Connector, path: str):
+def insert_posts(db: Connector, table: str):
     """
     Insert all rows from typed_posts.csv into Postgres.
     """
-    table = "typed_posts"
-
+    path = scripts[table]["data"]
     data = parse_posts(path)
     csv_reader = csv.reader(data)
     next(csv_reader)  # Discard header
@@ -183,18 +200,17 @@ def insert_posts(db: Connector, path: str):
     print(f"Finished inserting {total_rows} rows into table '{table}'")
 
 
-def insert_comments(db: Connector, path: str):
+def insert_csv(db: Connector, table: str, n: int):
     """
-    Insert all rows from typed_comments.csv into Postgres.
+    Insert all rows from the specified table into Postgres.
     """
-    table = "typed_comments"
-
     total_rows = 0
-    n = 50000  # Rows per transaction
     query = f"INSERT INTO {table} VALUES %s;"
 
+    path = scripts[table]["data"]
     file = open(path, encoding="utf8")
     file.readline()  # Discard header
+    print("discarded header for", table)
 
     progress_bar = tqdm()
     for chunk in iter(lambda: tuple(islice(file, n)), ()):
