@@ -10,7 +10,7 @@ def cli():
 @cli.command()
 def init():
     db = pg.Connector()
-    # db.initialize_table("typed_posts")
+    db.initialize_table("typed_posts")
     db.initialize_table("typed_comments")
     db.close()
 
