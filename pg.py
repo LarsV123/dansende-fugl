@@ -128,7 +128,7 @@ class Connector:
         print(f"Finished initializing {table}")
 
 
-def parse_posts(path: str) -> list[str]:
+def parse_posts(path: str) -> list:
     """
     Read file, split on correct line endings and return list of rows.
 
