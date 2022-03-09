@@ -1,7 +1,7 @@
-import sqlite3
+import pg
 
 
-def get_user_data(connection: sqlite3.Connection, table: str, user: str):
+def get_user_data(db: pg.Connector, table: str, user: str):
     """
     Get all data for a specific user from a given table.
     """
@@ -13,12 +13,13 @@ def get_user_data(connection: sqlite3.Connection, table: str, user: str):
     ;
     """
 
-    cursor = connection.cursor()
-    rows = cursor.execute(query).fetchall()
+    db.cursor.execute(query)
+    rows = db.cursor.fetchall()
+    db.connection.commit()
     return rows
 
 
-def get_user_comments(connection: sqlite3.Connection, table: str, user: str):
+def get_user_comments(db: pg.Connector, table: str, user: str):
     """
     Get only comments for a specific user from a given table.
     """
@@ -30,22 +31,23 @@ def get_user_comments(connection: sqlite3.Connection, table: str, user: str):
     ;
     """
 
-    cursor = connection.cursor()
-    rows = cursor.execute(query).fetchall()
+    db.cursor.execute(query)
+    rows = db.cursor.fetchall()
+    db.connection.commit()
     return rows
-
 
 if __name__ == "__main__":
     # Example usage
-    database = "data.db"
-    connection = sqlite3.connect(database)
+    db = pg.Connector()
 
     # Include metadata
-    rows = get_user_data(connection, "mbti9k_comments", "Famraine")
+    rows = get_user_data(db, "comments", "Famraine")
     for row in rows:
         print(row)
 
     # Only comments
-    rows = get_user_comments(connection, "mbti9k_comments", "Famraine")
+    rows = get_user_comments(db, "comments", "Famraine")
     for row in rows:
         print(row)
+
+    db.connection.close()
