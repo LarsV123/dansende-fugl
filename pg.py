@@ -62,6 +62,16 @@ class Connector:
         with open(path, "r") as file:
             self.cursor.execute(file.read())
 
+    def vacuum_analyze(self):
+        """
+        This needs to run after a bulk load of data.
+        """
+        old_isolation_level = self.connection.isolation_level
+        self.connection.set_isolation_level(0)
+        query = "VACUUM ANALYZE"
+        self.cursor.execute(query)
+        self.connection.set_isolation_level(old_isolation_level)
+
     def close(self):
         self.cursor.close()
         self.connection.close()

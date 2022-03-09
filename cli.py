@@ -12,6 +12,7 @@ def init():
     db = pg.Connector()
     db.initialize_table("typed_posts")
     db.initialize_table("typed_comments")
+    db.vacuum_analyze()
     db.close()
 
 
