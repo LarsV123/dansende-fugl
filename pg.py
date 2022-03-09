@@ -137,7 +137,6 @@ class Connector:
             elif table == "typed_comments":
                 insert_csv(self, table, 25000)
             elif table == "mbti9k":
-                # pass
                 insert_csv(self, table, 25)
             else:
                 raise ValueError
