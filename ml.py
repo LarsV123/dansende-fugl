@@ -36,6 +36,28 @@ MBTI_TYPES = [
 ]
 
 
+class BatchTracker:
+    """ A simple batch tracker to feed data in batches to a function. """
+
+    def __init__(self, data, batch_size):
+        self.data = data
+        self.batch_size = batch_size
+        self.count = 0
+        self.complete = False
+
+    def get_next_batch(self):
+        """ Provides the next batch of data or an empty list if the end of the data has been reached. """
+        if self.complete:
+            return []
+        start = self.count
+        end = start + self.batch_size
+        if end >= len(self.data):
+            end = len(self.data)
+            self.complete = True
+        self.count += self.batch_size
+        return self.data[start:end]
+
+
 def get_one_hot(mbti_type: str):
     """:param mbti_type: One of the sixteen mbti personality types.
     :returns: A one hot encoding of the given mbti."""
@@ -86,33 +108,26 @@ def remove_stop_words(text):
 
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
-    count = 0
-    run = False
-    while run:
-        start = count
-        end = count + batch_size
-        if end >= len(x):
-            end = len(x)
-            run = False
-        train_x = np.asarray(tkz.texts_to_matrix(x[start:end])).astype(np.float32)
-        model.fit(train_x, y[start:end], callbacks=tb)
-        count += batch_size
+    x_batcher = BatchTracker(data=x, batch_size=batch_size)
+    y_batcher = BatchTracker(data=x, batch_size=batch_size)
+    x_batch = x_batcher.get_next_batch()
+    y_batch = y_batcher.get_next_batch()
+    while len(x_batch):
+        train_x = np.asarray(tkz.texts_to_matrix(x_batch)).astype(np.float32)
+        model.fit(train_x, y_batch, callbacks=tb)
     return model
 
 
 def evaluate_in_batch(model, tkz, x, y, batch_size):
-    count = 0
-    run = True
-    print("Evaluation on test: ")
-    while run:
-        start = count
-        end = count + batch_size
-        if end >= len(x):
-            end = len(x)
-            run = False
-        test_x = np.asarray(tkz.texts_to_matrix(x[start:end])).astype(np.float32)
-        model.evaluate(test_x, y[start:end])
-        count += batch_size
+    x_batcher = BatchTracker(data=x, batch_size=batch_size)
+    y_batcher = BatchTracker(data=x, batch_size=batch_size)
+    x_batch = x_batcher.get_next_batch()
+    y_batch = y_batcher.get_next_batch()
+    while len(x_batch):
+        test_x = np.asarray(tkz.texts_to_matrix(x_batch)).astype(np.float32)
+        model.evaluate(test_x, y_batch)
+        x_batch = x_batcher.get_next_batch()
+        y_batch = y_batcher.get_next_batch()
     return model
 
 
@@ -155,9 +170,9 @@ def pre_process_batch(arr, batch_size, folder):
         count += batch_size
 
 
-def train_model(comments, types, tokenizer, full_type: bool):
+def train_model(comments, types, tokenizer, full_type: bool, save: bool = True):
     x_train, x_test, y_train, y_test = train_test_split(
-        comments, types, test_size=0.25, random_state=1, stratify=types
+        comments, types, test_size=0.25, random_state=1, stratify=None
     )
     func = "get_individual_class"
     if full_type:
@@ -168,7 +183,7 @@ def train_model(comments, types, tokenizer, full_type: bool):
         np.float32
     )
     if full_type:
-        models = full_model()
+        models = full_model()[0]
         file_path = f"./models/full_model_{comments.size}"
         models.fit(
             model_input,
@@ -177,15 +192,15 @@ def train_model(comments, types, tokenizer, full_type: bool):
             epochs=10,
             validation_split=0.2,
         )
-        models.save(file_path)
+        if save:
+            models.save(file_path)
     else:
         models = individual_models()
-        dimensions = ["I_E", "S_N", "F_T", "J_P"]
+        dimensions = ["I-E", "S-N", "F-T", "J-P"]
         file_path = f"./models/individual_model_{comments.size}"
         for _ in range(len(models)):
-            print(f"Training on dimension: {dimensions[_]}")
+            print(f"\nTraining on dimension: {dimensions[_]}")
             model = models[_]
-            print(y_train[0:5, _])
             model.fit(
                 model_input,
                 y_train[:, _],
@@ -193,7 +208,8 @@ def train_model(comments, types, tokenizer, full_type: bool):
                 epochs=10,
                 validation_split=0.2,
             )
-            model.save(file_path + dimensions[_])
+            if save:
+                model.save(file_path + f"_{dimensions[_]}")
     return models
 
 
@@ -209,7 +225,7 @@ def individual_models():
         model.compile(
             loss="binary_crossentropy",
             optimizer="adam",
-            metrics=["accuracy"],
+            metrics=["mean_squared_error", "accuracy"],
         )
         models.append(model)
     return models
@@ -225,9 +241,9 @@ def full_model():
     model.compile(
         loss="categorical_crossentropy",
         optimizer="adam",
-        metrics=["categorical_accuracy"],
+        metrics=["categorical_accuracy", "mean_squared_error"],
     )
-    return model
+    return [model]
 
 
 def get_processed_data(size, preprocess, folder="processed"):
@@ -255,14 +271,22 @@ def get_processed_data(size, preprocess, folder="processed"):
 
 
 if __name__ == "__main__":
-    start_time = time.time()
+    START_TIME = time.time()
 
-    COMMENTS, TYPES = get_processed_data(size=100, preprocess=False)
+    COMMENTS, TYPES = get_processed_data(size=10000, preprocess=False, folder="test")
 
-    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(10000)
-    TOKENIZER.fit_on_texts(COMMENTS)
+    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(1000)
+    COMMENT_BATCHER = BatchTracker(data=COMMENTS, batch_size=int(len(COMMENTS) / 10))
+    BATCH = COMMENT_BATCHER.get_next_batch()
+    COUNT = 0
+    while len(BATCH):
+        print(f"Tokenizer fitting batch on {COUNT}")
+        COUNT += 1
+        TOKENIZER.fit_on_texts(BATCH)
+        BATCH = COMMENT_BATCHER.get_next_batch()
 
-    MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=False)
-    INDIVIDUAL_MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=True)
+    save = False
+    MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=True, save=save)
+    INDIVIDUAL_MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=False, save=save)
 
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print("--- %s seconds ---" % (time.time() - START_TIME))
