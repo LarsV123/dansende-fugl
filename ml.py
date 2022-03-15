@@ -7,10 +7,11 @@ from nltk.stem import PorterStemmer
 import numpy as np
 import tensorflow as tf
 import re
-from keras.layers import Dense, Dropout
 from keras.models import Sequential
 from spellchecker import SpellChecker
 from sklearn.model_selection import train_test_split
+from models.nn_full import NNFull
+from models.nn_individual import NNIndividual
 
 nltk.download("punkt")
 nltk.download("stopwords")
@@ -37,7 +38,7 @@ MBTI_TYPES = [
 
 
 class BatchTracker:
-    """ A simple batch tracker to feed data in batches to a function. """
+    """A simple batch tracker to feed data in batches to a function."""
 
     def __init__(self, data, batch_size):
         self.data = data
@@ -46,7 +47,7 @@ class BatchTracker:
         self.complete = False
 
     def get_next_batch(self):
-        """ Provides the next batch of data or an empty list if the end of the data has been reached. """
+        """Provides the next batch of data or an empty list if the end of the data has been reached."""
         if self.complete:
             return []
         start = self.count
@@ -170,80 +171,18 @@ def pre_process_batch(arr, batch_size, folder):
         count += batch_size
 
 
-def train_model(comments, types, tokenizer, full_type: bool, save: bool = True):
-    x_train, x_test, y_train, y_test = train_test_split(
-        comments, types, test_size=0.25, random_state=1, stratify=None
-    )
+def convert_to_model_input(x, y, func, tokenizer):
+    y = np.asarray([eval(func)(mbti_type) for mbti_type in y])
+    x = np.asarray(tokenizer.texts_to_matrix(x, mode="tfidf")).astype(np.float32)
+    return x, y
+
+
+def train_model(x, y, tokenizer, model, verbose: bool = False):
     func = "get_individual_class"
-    if full_type:
+    if isinstance(model, NNFull):
         func = "get_one_hot"
-    y_train = np.asarray([eval(func)(mbti_type) for mbti_type in y_train])
-    y_test = np.asarray([eval(func)(mbti_type) for mbti_type in y_test])
-    model_input = np.asarray(tokenizer.texts_to_matrix(x_train, mode="tfidf")).astype(
-        np.float32
-    )
-    if full_type:
-        models = full_model()[0]
-        file_path = f"./models/full_model_{comments.size}"
-        models.fit(
-            model_input,
-            y_train,
-            batch_size=32,
-            epochs=10,
-            validation_split=0.2,
-        )
-        if save:
-            models.save(file_path)
-    else:
-        models = individual_models()
-        dimensions = ["I-E", "S-N", "F-T", "J-P"]
-        file_path = f"./models/individual_model_{comments.size}"
-        for _ in range(len(models)):
-            print(f"\nTraining on dimension: {dimensions[_]}")
-            model = models[_]
-            model.fit(
-                model_input,
-                y_train[:, _],
-                batch_size=32,
-                epochs=10,
-                validation_split=0.2,
-            )
-            if save:
-                model.save(file_path + f"_{dimensions[_]}")
-    return models
-
-
-def individual_models():
-    """Build and return four individual models, meant to predict one of the four axis in mbti each."""
-    models = []
-    for _ in range(4):
-        model = Sequential()
-        for i in range(4):
-            model.add(Dense(128, activation="relu", kernel_regularizer="L2"))
-            model.add(Dropout(0.4))
-        model.add(Dense(1, activation="sigmoid"))
-        model.compile(
-            loss="binary_crossentropy",
-            optimizer="adam",
-            metrics=["mean_squared_error", "accuracy"],
-        )
-        models.append(model)
-    return models
-
-
-def full_model():
-    """Build and return a model meant for predicting one out of 16 personality types."""
-    model = Sequential()
-    for i in range(4):
-        model.add(Dense(64, activation="relu", kernel_regularizer="L2"))
-        model.add(Dropout(0.2))
-    model.add(Dense(16, activation="softmax"))
-    model.compile(
-        loss="categorical_crossentropy",
-        optimizer="adam",
-        metrics=["categorical_accuracy", "mean_squared_error"],
-    )
-    return [model]
+    x, y = convert_to_model_input(x, y, func, tokenizer)
+    model.train(x=x, y=y, verbose=verbose)
 
 
 def get_processed_data(size, preprocess, folder="processed"):
@@ -286,7 +225,13 @@ if __name__ == "__main__":
         BATCH = COMMENT_BATCHER.get_next_batch()
 
     save = False
-    MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=True, save=save)
-    INDIVIDUAL_MODELS = train_model(COMMENTS, TYPES, TOKENIZER, full_type=False, save=save)
+    # FULL_MODEL = NNFull(save=save)
+    INDIVIDUAL_MODELS = NNIndividual(save=save)
+
+    X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
+        COMMENTS, TYPES, test_size=0.25, random_state=1, stratify=None
+    )
+    # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
+    train_model(X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS)
 
     print("--- %s seconds ---" % (time.time() - START_TIME))
