@@ -12,6 +12,8 @@ from spellchecker import SpellChecker
 from sklearn.model_selection import train_test_split
 from models.nn_full import NNFull
 from models.nn_individual import NNIndividual
+import matplotlib.pyplot as plt
+from models.lgbm import LGBM
 
 nltk.download("punkt")
 nltk.download("stopwords")
@@ -68,7 +70,7 @@ def get_one_hot(mbti_type: str):
     return one_hot
 
 
-def get_individual_class(mbti_type):
+def get_individual_one_hot(mbti_type):
     """:param mbti_type: One of the sixteen mbti personality types.
     :returns A one hot encoding of for each of the four individual axis of mbti: I/E, S/N, F/T, J/P."""
     individual_class = {"i": 0, "e": 1, "s": 0, "n": 1, "f": 0, "t": 1, "j": 0, "p": 1}
@@ -76,6 +78,16 @@ def get_individual_class(mbti_type):
     for char in mbti_type:
         classification.append(individual_class[char])
     return classification
+
+
+def get_type_from_individual_one_hot(one_hot_mbti_type, dim):
+    if not dim:
+        dim = [i for i in range(len(one_hot_mbti_type))]
+    dim_map = [{0: "i", 1: "e"}, {0: "s", 1: "n"}, {0: "f", 1: "t"}, {0: "j", 1: "p"}]
+    mbti_type = ""
+    for i in range(len(dim)):
+        mbti_type += dim_map[dim[i]][one_hot_mbti_type[i]]
+    return mbti_type
 
 
 def get_typed_comments(batch_size, n):
@@ -177,12 +189,60 @@ def convert_to_model_input(x, y, func, tokenizer):
     return x, y
 
 
-def train_model(x, y, tokenizer, model, verbose: bool = False):
-    func = "get_individual_class"
+def train_model(x, y, tokenizer, model, dim=None, verbose: bool = False):
+    func = "get_individual_one_hot"
     if isinstance(model, NNFull):
         func = "get_one_hot"
     x, y = convert_to_model_input(x, y, func, tokenizer)
-    model.train(x=x, y=y, verbose=verbose)
+    model.train(x=x, y=y, verbose=verbose, dim=dim)
+
+
+def predict(x, y, model, tokenizer, dim=None):
+    func = "get_individual_one_hot"
+    if isinstance(model, NNFull):
+        func = "get_one_hot"
+    x, y_true = convert_to_model_input(x, y, func, tokenizer)
+    y_pred = model.predict(x, dim=dim)
+    report(y_pred=y_pred, y_true=y_true, dim=dim)
+    return y_pred
+
+
+def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
+    temp = []
+    if dim:
+        for i in dim:
+            for j in range(len(y_true)):
+                temp.append([y_true[j, i]])
+        y_true = temp
+    y_pred = [get_type_from_individual_one_hot(encoding, dim) for encoding in y_pred]
+    y_true = [get_type_from_individual_one_hot(encoding, dim) for encoding in y_true]
+    values, counts = np.unique(y_true, return_counts=True, axis=0)
+    correct = {}
+    for i in range(len(y_pred)):
+        pred_type = y_pred[i]
+        if pred_type == y_true[i]:
+            if pred_type in correct:
+                correct[pred_type] += 1
+            else:
+                correct[pred_type] = 1
+    x = []
+    for i in range(len(values)):
+        v = values[i]
+        c = counts[i]
+        if v in correct:
+            x.append(correct[v] / c)
+        else:
+            x.append(0)
+    plt.plot(values, x, "o")
+    plt.ylim([0, plt.ylim()[1]])
+    plt.xlabel("MBTI type")
+    plt.ylabel("Correct prediction percentage")
+    plt.show()
+    # plt.plot(values, counts, "o")
+    # plt.ylim([0, plt.ylim()[1]])
+    # plt.xlabel("MBTI type")
+    # plt.ylabel("Number of examples")
+    # plt.show()
 
 
 def get_processed_data(size, preprocess, folder="processed"):
@@ -211,10 +271,9 @@ def get_processed_data(size, preprocess, folder="processed"):
 
 if __name__ == "__main__":
     START_TIME = time.time()
+    COMMENTS, TYPES = get_processed_data(size=1000, preprocess=False, folder="test")
 
-    COMMENTS, TYPES = get_processed_data(size=10000, preprocess=False, folder="test")
-
-    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(1000)
+    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(10000)
     COMMENT_BATCHER = BatchTracker(data=COMMENTS, batch_size=int(len(COMMENTS) / 10))
     BATCH = COMMENT_BATCHER.get_next_batch()
     COUNT = 0
@@ -226,12 +285,17 @@ if __name__ == "__main__":
 
     save = False
     # FULL_MODEL = NNFull(save=save)
-    INDIVIDUAL_MODELS = NNIndividual(save=save)
+    # INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
+    # INDIVIDUAL_MODELS = LGBM(save=save)
 
     X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
         COMMENTS, TYPES, test_size=0.25, random_state=1, stratify=None
     )
+    DIM = None
     # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
-    train_model(X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS)
+    INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
+    train_model(X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM)
+    Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    # Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
 
     print("--- %s seconds ---" % (time.time() - START_TIME))
