@@ -7,10 +7,11 @@ class Model(ABC):
         self, save: bool, file_path: str, epoch: int = 10, batch_size: int = 32
     ):
         self.save = save
-        self.models = self.build_model()
+        self.model = self.build_model()
         self.file_path = file_path
         self.epoch = epoch
         self.batch_size = batch_size
+        self.history = None
 
     @abstractmethod
     def build_model(self):
@@ -18,4 +19,8 @@ class Model(ABC):
 
     @abstractmethod
     def train(self, x: np.ndarray, y: np.ndarray, verbose: bool):
+        pass
+
+    @abstractmethod
+    def predict(self, x: np.ndarray, dim):
         pass

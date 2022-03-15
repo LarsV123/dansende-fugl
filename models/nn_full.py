@@ -1,5 +1,6 @@
 from keras.layers import Dense, Dropout
 from keras.models import Sequential
+
 from models.model import Model
 
 
@@ -21,16 +22,19 @@ class NNFull(Model):
         )
         return [model]
 
+
     def train(self, x, y, verbose):
         file_path = self.file_path + f"_{x.size}"
-        for model in self.models:
-            model.fit(
-                x,
-                y,
-                batch_size=self.batch_size,
-                epochs=self.epoch,
-                validation_split=0.2,
-                verbose=verbose,
-            )
-            if self.save:
-                model.save(file_path)
+        self.model.fit(
+            x,
+            y,
+            batch_size=self.batch_size,
+            epochs=self.epoch,
+            validation_split=0.2,
+            verbose=verbose,
+        )
+        if self.save:
+            self.model.save(file_path)
+
+    def predict(self, x):
+        return self.model.predict(x)
