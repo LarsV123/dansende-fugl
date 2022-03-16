@@ -208,7 +208,7 @@ def predict(x, y, model, tokenizer, dim=None):
 
 
 def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
-    """ Generate plots showing the prediction accuracy on the given data. """
+    """Generate plots showing the prediction accuracy on the given data."""
     temp = []
     if dim:
         for i in dim:
@@ -247,10 +247,10 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
 
 
 def get_processed_data(size: int, preprocess: bool, folder="processed"):
-    """ Return a preprocessed data set, consisting of comments and types.
-        :param size: If preprocess, determine the size of the dataset to process.
-        :preprocess: Determines whether to read from file or preprocess a new dataset.
-        :folder: Determine the folder within ./data to save to or read from."""
+    """Return a preprocessed data set, consisting of comments and types.
+    :param size: If preprocess, determine the size of the dataset to process.
+    :preprocess: Determines whether to read from file or preprocess a new dataset.
+    :folder: Determine the folder within ./data to save to or read from."""
     print("Loading data...")
     if preprocess:
         types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
@@ -275,7 +275,7 @@ def get_processed_data(size: int, preprocess: bool, folder="processed"):
 
 
 def tokenize_per_type():
-    """ Fit tokinizers on only comments from one specific type. """
+    """Fit tokinizers on only comments from one specific type."""
     tokenizers = {}
     top_words = {}
     for mbti in MBTI_TYPES:
@@ -287,14 +287,19 @@ def tokenize_per_type():
         tokenizer = fit_tokenizer(data=comment_one_type)
         tokenizers[mbti] = tokenizer
         l = len(tokenizer.word_index)
-        top_words[mbti] = [(tokenizer.index_word[i], round(tokenizer.word_counts[tokenizer.index_word[i]] / l, 2))
-                           for i in range(1, 11)]
+        top_words[mbti] = [
+            (
+                tokenizer.index_word[i],
+                round(tokenizer.word_counts[tokenizer.index_word[i]] / l, 2),
+            )
+            for i in range(1, 11)
+        ]
     return tokenizers, top_words
 
 
 def fit_tokenizer(data, num_words: int = 10000):
-    """ Generate a tokenizer from the given data.
-        :param num_words: Only use top words when converting to matrix. """
+    """Generate a tokenizer from the given data.
+    :param num_words: Only use top words when converting to matrix."""
     tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
     comment_batcher = BatchTracker(data=data, batch_size=int(len(data) / 10))
     batch = comment_batcher.get_next_batch()
@@ -324,7 +329,9 @@ if __name__ == "__main__":
     )
     DIM = None
     # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
-    train_model(X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM)
+    train_model(
+        X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM
+    )
     Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
     Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
 

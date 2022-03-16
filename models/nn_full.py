@@ -22,7 +22,6 @@ class NNFull(Model):
         )
         return [model]
 
-
     def train(self, x, y, verbose):
         file_path = self.file_path + f"_{x.size}"
         self.model.fit(

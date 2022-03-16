@@ -10,12 +10,19 @@ class LGBM(Model):
     def build_model(self):
         models = []
         for _ in range(4):
-            model = lgb.LGBMClassifier(n_estimators=100, metric="binary_logloss", silent=True,
-                                       n_jobs=4,
-                                       objective="binary",
-                                       learning_rate=0.1, num_leaves=15,
-                                       colsample_bytree=0.6, max_depth=3, is_unbalance=True,
-                                       min_data_in_leaf=25)
+            model = lgb.LGBMClassifier(
+                n_estimators=100,
+                metric="binary_logloss",
+                silent=True,
+                n_jobs=4,
+                objective="binary",
+                learning_rate=0.1,
+                num_leaves=15,
+                colsample_bytree=0.6,
+                max_depth=3,
+                is_unbalance=True,
+                min_data_in_leaf=25,
+            )
             models.append(model)
         return models
 
@@ -38,5 +45,7 @@ class LGBM(Model):
             full_type.append(pred)
         temp = []
         for i in range(len(full_type[0])):
-            temp.append([full_type[0][i], full_type[1][i], full_type[2][i], full_type[3][i]])
+            temp.append(
+                [full_type[0][i], full_type[1][i], full_type[2][i], full_type[3][i]]
+            )
         return np.array(temp)
