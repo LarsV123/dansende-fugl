@@ -12,21 +12,26 @@ class LGBM(Model):
         for _ in range(4):
             model = lgb.LGBMClassifier(n_estimators=100, metric="binary_logloss", silent=True,
                                        n_jobs=4,
-                                       learning_rate=0.1,
-                                       colsample_bytree=0.7, max_depth=9, subsample=0.8)
+                                       objective="binary",
+                                       learning_rate=0.1, num_leaves=15,
+                                       colsample_bytree=0.6, max_depth=3, is_unbalance=True,
+                                       min_data_in_leaf=25)
             models.append(model)
         return models
 
-    def train(self, x, y, verbose):
+    def train(self, x, y, verbose, dim=None):
         dimensions = ["I-E", "S-N", "F-T", "J-P"]
         file_path = self.file_path + f"_{x.size}"
-        for _ in range(len(self.model)):
-            print(f"\nTraining on dimension: {dimensions[_]}")
-            model = self.model[_]
-            labels = y[:, _]
-            self.model[_] = model.fit(x, labels)
+        model_idx = [i for i in range(len(self.model))]
+        if dim:
+            model_idx = dim
+        for i in model_idx:
+            print(f"\nTraining on dimension: {dimensions[i]}")
+            model = self.model[i]
+            labels = y[:, i]
+            self.model[i] = model.fit(x, labels)
 
-    def predict(self, x):
+    def predict(self, x, dim):
         full_type = []
         for model in self.model:
             pred = model.predict(x)
