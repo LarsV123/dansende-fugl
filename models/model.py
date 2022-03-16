@@ -7,10 +7,10 @@ class Model(ABC):
         self, save: bool, file_path: str, epoch: int = 10, batch_size: int = 32
     ):
         self.save = save
+        self.batch_size = batch_size
         self.model = self.build_model()
         self.file_path = file_path
         self.epoch = epoch
-        self.batch_size = batch_size
         self.history = None
 
     @abstractmethod
