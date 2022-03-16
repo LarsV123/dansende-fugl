@@ -158,24 +158,24 @@ def pre_process_batch(arr, batch_size, folder):
         curr_arr = arr[start:end]
         print("Creating tokens...")
         toktok = ToktokTokenizer()
-        curr_arr = [toktok.tokenize(x) for x in curr_arr]
+        curr_arr = [toktok.tokenize(x.lower()) for x in curr_arr]
+
+        print("Removing special characters...")
+        curr_arr = [[re.sub("[^a-zA-Z!?]+", "", x) for x in y] for y in curr_arr]
+        curr_arr = [[x for x in y if x != ""] for y in curr_arr]
 
         print("Removing stopwords...")
         curr_arr = [remove_stop_words(x) for x in curr_arr]
 
-        print("Removing special characters...")
-        curr_arr = [[re.sub("[^a-zA-Z0-9!?]+", "", x) for x in y] for y in curr_arr]
-        curr_arr = [[x for x in y if x != ""] for y in curr_arr]
-
         # Very slow, removed for now
         # print("Applying spellcheck...")
         # spell = SpellChecker()
-        # arr = [[spell.correction(x) for x in y] for y in curr_arr]
+        # curr_arr = [[spell.correction(x) for x in y] for y in curr_arr]
 
         # Also very slow, removed for now
         # print("Applying stemming...")
         # porter = PorterStemmer()
-        # arr = [[porter.stem(x) for x in y] for y in curr_arr]
+        # curr_arr = [[porter.stem(x) for x in y] for y in curr_arr]
 
         # Save to compressed file
         np.savez_compressed(f"./data/{folder}/comments_{idx}", np.asarray(curr_arr))
@@ -208,6 +208,7 @@ def predict(x, y, model, tokenizer, dim=None):
 
 
 def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
+    """ Generate plots showing the prediction accuracy on the given data. """
     temp = []
     if dim:
         for i in dim:
@@ -238,14 +239,18 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
     plt.xlabel("MBTI type")
     plt.ylabel("Correct prediction percentage")
     plt.show()
-    # plt.plot(values, counts, "o")
-    # plt.ylim([0, plt.ylim()[1]])
-    # plt.xlabel("MBTI type")
-    # plt.ylabel("Number of examples")
-    # plt.show()
+    plt.plot(values, counts, "o")
+    plt.ylim([0, plt.ylim()[1]])
+    plt.xlabel("MBTI type")
+    plt.ylabel("Number of examples")
+    plt.show()
 
 
-def get_processed_data(size, preprocess, folder="processed"):
+def get_processed_data(size: int, preprocess: bool, folder="processed"):
+    """ Return a preprocessed data set, consisting of comments and types.
+        :param size: If preprocess, determine the size of the dataset to process.
+        :preprocess: Determines whether to read from file or preprocess a new dataset.
+        :folder: Determine the folder within ./data to save to or read from."""
     print("Loading data...")
     if preprocess:
         types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
@@ -269,23 +274,49 @@ def get_processed_data(size, preprocess, folder="processed"):
     return comments, types
 
 
+def tokenize_per_type():
+    """ Fit tokinizers on only comments from one specific type. """
+    tokenizers = {}
+    top_words = {}
+    for mbti in MBTI_TYPES:
+        print(f"{mbti}")
+        idx = np.where(TYPES == mbti)
+        if not len(idx[0]):
+            continue
+        comment_one_type = np.hstack(COMMENTS[idx])
+        tokenizer = fit_tokenizer(data=comment_one_type)
+        tokenizers[mbti] = tokenizer
+        l = len(tokenizer.word_index)
+        top_words[mbti] = [(tokenizer.index_word[i], round(tokenizer.word_counts[tokenizer.index_word[i]] / l, 2))
+                           for i in range(1, 11)]
+    return tokenizers, top_words
+
+
+def fit_tokenizer(data, num_words: int = 10000):
+    """ Generate a tokenizer from the given data.
+        :param num_words: Only use top words when converting to matrix. """
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
+    comment_batcher = BatchTracker(data=data, batch_size=int(len(data) / 10))
+    batch = comment_batcher.get_next_batch()
+    count = 0
+    while len(batch):
+        print(f"Tokenizer fitting batch on {count}")
+        count += 1
+        tokenizer.fit_on_texts(batch)
+        batch = comment_batcher.get_next_batch()
+    return tokenizer
+
+
 if __name__ == "__main__":
     START_TIME = time.time()
     COMMENTS, TYPES = get_processed_data(size=1000, preprocess=False, folder="test")
 
-    TOKENIZER = tf.keras.preprocessing.text.Tokenizer(10000)
-    COMMENT_BATCHER = BatchTracker(data=COMMENTS, batch_size=int(len(COMMENTS) / 10))
-    BATCH = COMMENT_BATCHER.get_next_batch()
-    COUNT = 0
-    while len(BATCH):
-        print(f"Tokenizer fitting batch on {COUNT}")
-        COUNT += 1
-        TOKENIZER.fit_on_texts(BATCH)
-        BATCH = COMMENT_BATCHER.get_next_batch()
-
+    # TOKS, TOP_W = tokenize_per_type()
+    #
+    TOKENIZER = fit_tokenizer(data=COMMENTS)
     save = False
     # FULL_MODEL = NNFull(save=save)
-    # INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
+    INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
     # INDIVIDUAL_MODELS = LGBM(save=save)
 
     X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
@@ -293,9 +324,8 @@ if __name__ == "__main__":
     )
     DIM = None
     # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
-    INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
     train_model(X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM)
     Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
-    # Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
 
     print("--- %s seconds ---" % (time.time() - START_TIME))
