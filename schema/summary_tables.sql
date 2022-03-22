@@ -2,9 +2,26 @@
 DROP TABLE IF EXISTS comments_per_mbti;
 CREATE TABLE comments_per_mbti AS
 SELECT mbti,
-  COUNT(*) AS mbti_comment_count
+  COUNT(*) AS mbti_comment_count,
+  COUNT(*) * 1.0 / (
+    SELECT COUNT(*)
+    FROM comments
+  ) AS share
 FROM comments
-GROUP BY mbti;
+GROUP BY mbti
+ORDER BY mbti DESC;
+-- Unique version
+DROP TABLE IF EXISTS unique_comments_per_mbti;
+CREATE TABLE unique_comments_per_mbti AS
+SELECT mbti,
+  COUNT(*) AS mbti_comment_count,
+  COUNT(*) * 1.0 / (
+    SELECT COUNT(*)
+    FROM unique_comments
+  ) AS share
+FROM unique_comments
+GROUP BY mbti
+ORDER BY mbti DESC;
 -- Posts per MBTI type
 DROP TABLE IF EXISTS posts_per_mbti;
 CREATE TABLE posts_per_mbti AS
