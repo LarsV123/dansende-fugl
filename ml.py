@@ -122,7 +122,7 @@ def remove_stop_words(text):
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
     x_batcher = BatchTracker(data=x, batch_size=batch_size)
-    y_batcher = BatchTracker(data=x, batch_size=batch_size)
+    y_batcher = BatchTracker(data=y, batch_size=batch_size)
     x_batch = x_batcher.get_next_batch()
     y_batch = y_batcher.get_next_batch()
     while len(x_batch):
@@ -144,7 +144,7 @@ def evaluate_in_batch(model, tkz, x, y, batch_size):
     return model
 
 
-def pre_process_batch(arr, batch_size, folder):
+def pre_process_batch(arr, batch_size, folder, two_gram: bool):
     count = 0
     idx = 0
     run = True
@@ -167,6 +167,9 @@ def pre_process_batch(arr, batch_size, folder):
         print("Removing stopwords...")
         curr_arr = [remove_stop_words(x) for x in curr_arr]
 
+        if two_gram:
+            curr_arr = [[f"{x[i]} {x[i + 1]}" for i in range(len(x) - 1)] for x in curr_arr]
+
         # Very slow, removed for now
         # print("Applying spellcheck...")
         # spell = SpellChecker()
@@ -183,9 +186,14 @@ def pre_process_batch(arr, batch_size, folder):
         count += batch_size
 
 
+def rescale_along_row(x):
+    return (x - x.min()) / x.max()
+
+
 def convert_to_model_input(x, y, func, tokenizer):
     y = np.asarray([eval(func)(mbti_type) for mbti_type in y])
     x = np.asarray(tokenizer.texts_to_matrix(x, mode="tfidf")).astype(np.float32)
+    # x = np.apply_along_axis(rescale_along_row, 1, x)
     return x, y
 
 
@@ -194,7 +202,15 @@ def train_model(x, y, tokenizer, model, dim=None, verbose: bool = False):
     if isinstance(model, NNFull):
         func = "get_one_hot"
     x, y = convert_to_model_input(x, y, func, tokenizer)
-    model.train(x=x, y=y, verbose=verbose, dim=dim)
+    if len(x) > 2000:
+        x_batcher = BatchTracker(data=x, batch_size=500)
+        y_batcher = BatchTracker(data=y, batch_size=500)
+        x_batch = x_batcher.get_next_batch()
+        y_batch = y_batcher.get_next_batch()
+        while len(x_batch):
+            model.train(x=x_batch, y=y_batch, verbose=verbose, dim=dim)
+    else:
+        model.train(x, y, verbose=verbose, dim=dim)
 
 
 def predict(x, y, model, tokenizer, dim=None):
@@ -246,15 +262,15 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
     plt.show()
 
 
-def get_processed_data(size: int, preprocess: bool, folder="processed"):
+def get_processed_data(size: int, preprocess: bool, folder="processed", two_gram: bool = False):
     """Return a preprocessed data set, consisting of comments and types.
     :param size: If preprocess, determine the size of the dataset to process.
-    :preprocess: Determines whether to read from file or preprocess a new dataset.
-    :folder: Determine the folder within ./data to save to or read from."""
+    :param preprocess: Determines whether to read from file or preprocess a new dataset.
+    :param folder: Determine the folder within ./data to save to or read from."""
     print("Loading data...")
     if preprocess:
         types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
-        pre_process_batch(comments, int(len(comments) / 10), folder)
+        pre_process_batch(comments, int(len(comments) / 10), folder, two_gram=two_gram)
         np.savez_compressed(f"./data/{folder}/types.npz", np.asarray(types))
     comments = []
     i = 0
@@ -300,7 +316,7 @@ def tokenize_per_type():
 def fit_tokenizer(data, num_words: int = 10000):
     """Generate a tokenizer from the given data.
     :param num_words: Only use top words when converting to matrix."""
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(10000)
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words)
     comment_batcher = BatchTracker(data=data, batch_size=int(len(data) / 10))
     batch = comment_batcher.get_next_batch()
     count = 0
@@ -314,10 +330,10 @@ def fit_tokenizer(data, num_words: int = 10000):
 
 if __name__ == "__main__":
     START_TIME = time.time()
-    COMMENTS, TYPES = get_processed_data(size=1000, preprocess=False, folder="test")
+    COMMENTS, TYPES = get_processed_data(size=1000, preprocess=False, folder="xp", two_gram=True)
 
     # TOKS, TOP_W = tokenize_per_type()
-    #
+
     TOKENIZER = fit_tokenizer(data=COMMENTS)
     save = False
     # FULL_MODEL = NNFull(save=save)
