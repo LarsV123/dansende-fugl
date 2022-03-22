@@ -40,3 +40,54 @@ CREATE TABLE comments_per_hour AS (
   FROM total_comments_per_mbti AS a
     NATURAL JOIN temp_comments_per_hour
 );
+DROP TABLE IF EXISTS top_subreddits_mbti;
+CREATE TABLE top_subreddits_mbti AS (
+  SELECT subreddit,
+    COUNT(*) AS comment_count
+  FROM comments
+  GROUP BY subreddit
+  ORDER BY comment_count DESC
+  LIMIT 25
+);
+DROP TABLE IF EXISTS top_subreddits CASCADE;
+CREATE TABLE top_subreddits AS (
+  SELECT subreddit,
+    COUNT(*) AS comment_count
+  FROM comments
+  WHERE NOT is_mbti_related
+  GROUP BY subreddit
+  ORDER BY comment_count DESC
+  LIMIT 25
+);
+DROP VIEW IF EXISTS top_comments;
+CREATE VIEW top_comments AS (
+  SELECT *
+  FROM top_subreddits
+    NATURAL JOIN (
+      SELECT subreddit,
+        mbti,
+        COUNT(*) AS mbti_comments
+      FROM comments
+      WHERE subreddit IN (
+          SELECT subreddit
+          FROM top_subreddits
+        )
+      GROUP BY subreddit,
+        mbti
+    ) AS foo
+  ORDER BY comment_count DESC
+);
+DROP VIEW IF EXISTS heatmap;
+CREATE VIEW heatmap AS (
+  SELECT *
+  FROM top_subreddits
+    NATURAL JOIN (
+      SELECT subreddit,
+        mbti,
+        COUNT(*) AS mbti_comments
+      FROM comments
+      GROUP BY subreddit,
+        mbti
+    ) AS foo
+  ORDER BY comment_count DESC
+);
