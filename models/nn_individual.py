@@ -1,3 +1,4 @@
+from typing import List
 from keras import Sequential
 from keras.layers import Dense, Dropout
 from models.model import Model
@@ -8,10 +9,10 @@ import matplotlib.pyplot as plt
 
 class Individual:
 
-    def __init__(self, layers: int, units: int, dropout: float, batch_size: int = 32, epochs: int = 20):
+    def __init__(self, layers: List[int], dropout: float, batch_size: int = 32, epochs: int = 20):
         model = Sequential()
-        for i in range(layers):
-            model.add(Dense(units, activation="relu", kernel_regularizer="L2"))
+        for i in layers:
+            model.add(Dense(i, activation="relu", kernel_regularizer="L2"))
             model.add(Dropout(dropout))
         model.add(Dense(1, activation="sigmoid"))
         model.compile(
@@ -45,10 +46,10 @@ class NNIndividual(Model):
 
     def build_model(self):
         """Build and return four individual models, meant to predict one of the four axis in mbti each."""
-        ie = Individual(layers=3, units=64, dropout=0.3, epochs=200)
-        sn = Individual(layers=3, units=64, dropout=0.3, epochs=200)
-        ft = Individual(layers=3, units=64, dropout=0.3, epochs=200)
-        jp = Individual(layers=3, units=64, dropout=0.3, epochs=200)
+        ie = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
+        sn = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
+        ft = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
+        jp = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
         return [ie, sn, ft, jp]
 
     def train(self, x, y, verbose, dim=None):
