@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 
 
 class Individual:
-
-    def __init__(self, layers: List[int], dropout: float, batch_size: int = 32, epochs: int = 20):
+    def __init__(
+        self, layers: List[int], dropout: float, batch_size: int = 32, epochs: int = 20
+    ):
         model = Sequential()
         for i in layers:
             model.add(Dense(i, activation="relu", kernel_regularizer="L2"))
@@ -18,8 +19,14 @@ class Individual:
         model.compile(
             loss="binary_crossentropy",
             optimizer="adam",
-            metrics=["mean_squared_error", AUC(name="auc"), Precision(name="precision"), Recall(name="recall"),
-                     TruePositives(name="true_positive"), TrueNegatives(name="true_negatives")],
+            metrics=[
+                "mean_squared_error",
+                AUC(name="auc"),
+                Precision(name="precision"),
+                Recall(name="recall"),
+                TruePositives(name="true_positive"),
+                TrueNegatives(name="true_negatives"),
+            ],
         )
         self.model = model
         self.epochs = epochs
@@ -33,7 +40,7 @@ class Individual:
             epochs=self.epochs,
             validation_split=0.2,
             verbose=verbose,
-            class_weight=weights
+            class_weight=weights,
         )
 
     def predict(self, y):
@@ -46,10 +53,18 @@ class NNIndividual(Model):
 
     def build_model(self):
         """Build and return four individual models, meant to predict one of the four axis in mbti each."""
-        ie = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
-        sn = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
-        ft = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
-        jp = Individual(layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size)
+        ie = Individual(
+            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+        )
+        sn = Individual(
+            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+        )
+        ft = Individual(
+            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+        )
+        jp = Individual(
+            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+        )
         return [ie, sn, ft, jp]
 
     def train(self, x, y, verbose, dim=None):
@@ -81,20 +96,27 @@ class NNIndividual(Model):
         return np.hstack(full_type)
 
     def plot_metrics(self, history, dim):
-        metrics = ['loss', 'auc', "true_positive", "true_negatives"]
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        metrics = ["loss", "auc", "true_positive", "true_negatives"]
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
         plt.suptitle(f"{dim}")
         for n, metric in enumerate(metrics):
             name = metric.replace("_", " ").capitalize()
             plt.subplot(2, 2, n + 1)
-            plt.plot(history.epoch, history.history[metric], color=colors[0], label='Train')
-            plt.plot(history.epoch, history.history['val_' + metric],
-                     color=colors[0], linestyle="--", label='Val')
-            plt.xlabel('Epoch')
+            plt.plot(
+                history.epoch, history.history[metric], color=colors[0], label="Train"
+            )
+            plt.plot(
+                history.epoch,
+                history.history["val_" + metric],
+                color=colors[0],
+                linestyle="--",
+                label="Val",
+            )
+            plt.xlabel("Epoch")
             plt.ylabel(name)
-            if metric == 'loss':
+            if metric == "loss":
                 plt.ylim([0, plt.ylim()[1]])
-            elif metric == 'auc':
+            elif metric == "auc":
                 plt.ylim([0.1, 1])
             else:
                 plt.ylim([0, plt.ylim()[1]])

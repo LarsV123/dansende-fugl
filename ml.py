@@ -168,7 +168,9 @@ def pre_process_batch(arr, batch_size, folder, two_gram: bool):
         curr_arr = [remove_stop_words(x) for x in curr_arr]
 
         if two_gram:
-            curr_arr = [[f"{x[i]} {x[i + 1]}" for i in range(len(x) - 1)] for x in curr_arr]
+            curr_arr = [
+                [f"{x[i]} {x[i + 1]}" for i in range(len(x) - 1)] for x in curr_arr
+            ]
 
         # Very slow, removed for now
         # print("Applying spellcheck...")
@@ -262,7 +264,9 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
     plt.show()
 
 
-def get_processed_data(size: int, preprocess: bool, folder="processed", two_gram: bool = False):
+def get_processed_data(
+    size: int, preprocess: bool, folder="processed", two_gram: bool = False
+):
     """Return a preprocessed data set, consisting of comments and types.
     :param size: If preprocess, determine the size of the dataset to process.
     :param preprocess: Determines whether to read from file or preprocess a new dataset.
@@ -330,7 +334,9 @@ def fit_tokenizer(data, num_words: int = 10000):
 
 if __name__ == "__main__":
     START_TIME = time.time()
-    COMMENTS, TYPES = get_processed_data(size=1000, preprocess=False, folder="xp", two_gram=True)
+    COMMENTS, TYPES = get_processed_data(
+        size=1000, preprocess=False, folder="xp", two_gram=True
+    )
 
     # TOKS, TOP_W = tokenize_per_type()
 
