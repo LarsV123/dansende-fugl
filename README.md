@@ -31,7 +31,7 @@ Recommended steps:
 
 - Set up your IDE to automatically reformat files with Black (or run `black .` manually before committing).
 - Download dataset and add it to the `/data` folder.
-- Start Postgres with `docker-compose up`
+- Start Postgres with `docker-compose --compatibility up`
 - Load the dataset(s) with the CLI tool
 - Create a `.env` file based on `.env-template`
 

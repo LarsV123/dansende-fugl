@@ -2,6 +2,11 @@ services:
   db:
     image: postgres
     shm_size: 2gb
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 2048M
     ports:
       - 5432:5432
     volumes:

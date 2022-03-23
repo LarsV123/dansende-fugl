@@ -80,6 +80,83 @@ def query2(db: pg.Connector):
     headers = ["MBTI", "Controversial comments", "Total comments", "Percentage controversial comments"]
     print(tabulate(rows, headers=headers, tablefmt="pretty"))
 
+def query3(db: pg.Connector):
+    """
+    Group comments by hour (24 buckets) and MBTI type.
+    """
+    query = """
+    --sql
+    SELECT mbti, EXTRACT(HOUR FROM to_timestamp(created_utc)) AS hour, COUNT(*) AS comments_per_hour
+    FROM comments
+    GROUP BY mbti, hour
+    ;
+    """
+    db.cursor.execute(query)
+    rows = db.cursor.fetchall()
+    print(tabulate(rows))
+
+def query4(db: pg.Connector):
+    query = """
+    --sql
+    SELECT mbti_type as mbti, subreddit, COUNT(*) AS comment_count
+    FROM typed_comments
+    GROUP BY subreddit, mbti
+    ORDER BY comment_count DESC
+    LIMIT 20
+    ;
+    """
+
+
+
+    query = """
+    --sql
+    SELECT comments.subreddit, comments.mbti
+    FROM comments
+    INNER JOIN (
+        SELECT subreddit, COUNT(*) as total_comments
+        FROM comments
+        GROUP BY subreddit
+        ORDER BY total_comments DESC
+        LIMIT 20
+    ) AS top_subreddits
+    ON comments.subreddit = top_subreddits.subreddit
+    ;
+    """
+    db.cursor.execute(query)
+    rows = db.cursor.fetchall()
+    print(tabulate(rows))
+
+
+def query6(db: pg.Connector):
+    """
+    How many users of each type are in the dataset in total. Number and percentage.
+    """
+    query = f"""
+    --sql
+    CREATE MATERIALIZED VIEW IF NOT EXISTS percentage_comments_per_mbti AS
+    SELECT mbti_type, 
+        COUNT(*) AS total_comments, 
+        COUNT(*) * 1.0/ (
+            SELECT COUNT(*) * 1.0 FROM typed_comments
+            ) AS percentage_comments
+    FROM typed_comments
+    GROUP BY mbti_type
+    ;
+    """
+    query = f"""
+    --sql
+    CREATE MATERIALIZED VIEW comments_per_mbti2 AS
+    SELECT mbti, COUNT(*) AS mbti_comment_count
+    FROM comments
+    GROUP BY mbti
+    ;
+    """
+    db.cursor.execute(query)
+    db.connection.commit()
+    # rows = db.cursor.fetchall()
+    # headers = [desc[0] for desc in db.cursor.description]
+    # print(tabulate(rows, headers=headers))
+
 
 
 def get_user_data(db: pg.Connector, table: str, user: str):
@@ -133,6 +210,6 @@ if __name__ == "__main__":
 
     # query1_1(db)
     # query1_2(db)
-    query2(db)
+
 
     db.connection.close()
