@@ -14,6 +14,7 @@ from models.nn_full import NNFull
 from models.nn_individual import NNIndividual
 import matplotlib.pyplot as plt
 from models.lgbm import LGBM
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 nltk.download("punkt")
 nltk.download("stopwords")
@@ -80,7 +81,7 @@ def get_individual_one_hot(mbti_type):
     return classification
 
 
-def get_type_from_individual_one_hot(one_hot_mbti_type, dim):
+def get_type_from_individual_one_hot(one_hot_mbti_type, dim=None):
     if not dim:
         dim = [i for i in range(len(one_hot_mbti_type))]
     dim_map = [{0: "i", 1: "e"}, {0: "s", 1: "n"}, {0: "f", 1: "t"}, {0: "j", 1: "p"}]
@@ -168,6 +169,7 @@ def pre_process_batch(arr, batch_size, folder, two_gram: bool):
         curr_arr = [remove_stop_words(x) for x in curr_arr]
 
         if two_gram:
+            print("Combining into two-grams...")
             curr_arr = [
                 [f"{x[i]} {x[i + 1]}" for i in range(len(x) - 1)] for x in curr_arr
             ]
@@ -203,15 +205,18 @@ def train_model(x, y, tokenizer, model, dim=None, verbose: bool = False):
     func = "get_individual_one_hot"
     if isinstance(model, NNFull):
         func = "get_one_hot"
-    x, y = convert_to_model_input(x, y, func, tokenizer)
     if len(x) > 2000:
-        x_batcher = BatchTracker(data=x, batch_size=500)
-        y_batcher = BatchTracker(data=y, batch_size=500)
+        x_batcher = BatchTracker(data=x, batch_size=1000)
+        y_batcher = BatchTracker(data=y, batch_size=1000)
         x_batch = x_batcher.get_next_batch()
         y_batch = y_batcher.get_next_batch()
         while len(x_batch):
+            x_batch, y_batch = convert_to_model_input(x_batch, y_batch, func, tokenizer)
             model.train(x=x_batch, y=y_batch, verbose=verbose, dim=dim)
+            x_batch = x_batcher.get_next_batch()
+            y_batch = y_batcher.get_next_batch()
     else:
+        x, y = convert_to_model_input(x, y, func, tokenizer)
         model.train(x, y, verbose=verbose, dim=dim)
 
 
@@ -219,9 +224,8 @@ def predict(x, y, model, tokenizer, dim=None):
     func = "get_individual_one_hot"
     if isinstance(model, NNFull):
         func = "get_one_hot"
-    x, y_true = convert_to_model_input(x, y, func, tokenizer)
+    x, _ = convert_to_model_input(x, y, func, tokenizer)
     y_pred = model.predict(x, dim=dim)
-    report(y_pred=y_pred, y_true=y_true, dim=dim)
     return y_pred
 
 
@@ -234,43 +238,69 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
                 temp.append([y_true[j, i]])
         y_true = temp
     y_pred = [get_type_from_individual_one_hot(encoding, dim) for encoding in y_pred]
-    y_true = [get_type_from_individual_one_hot(encoding, dim) for encoding in y_true]
     values, counts = np.unique(y_true, return_counts=True, axis=0)
-    correct = {}
+    ind_val, ind_counts = np.unique([[list(word) for word in x] for x in y_true], return_counts=True)
+    full_type = {}
+    individual_dim = {}
     for i in range(len(y_pred)):
         pred_type = y_pred[i]
-        if pred_type == y_true[i]:
-            if pred_type in correct:
-                correct[pred_type] += 1
+        true_type = y_true[i]
+        if pred_type == true_type:
+            if pred_type in full_type:
+                full_type[pred_type] += 1
             else:
-                correct[pred_type] = 1
+                full_type[pred_type] = 1
+        for j in range(len(pred_type)):
+            pred_axis = pred_type[j]
+            true_axis = true_type[j]
+            if pred_axis == true_axis:
+                if pred_axis in individual_dim:
+                    individual_dim[pred_axis] += 1
+                else:
+                    individual_dim[pred_axis] = 1
     x = []
     for i in range(len(values)):
         v = values[i]
         c = counts[i]
-        if v in correct:
-            x.append(correct[v] / c)
+        if v in full_type:
+            x.append(full_type[v] / c)
         else:
             x.append(0)
-    plt.plot(values, x, "o")
+    plot_predictions(x, values, counts)
+    x = []
+    for i in range(len(ind_val)):
+        v = ind_val[i]
+        c = ind_counts[i]
+        if v in individual_dim:
+            x.append(individual_dim[v] / c)
+        else:
+            x.append(0)
+    plot_predictions(x, ind_val, ind_counts, x_label="MBTI axis")
+
+
+def plot_predictions(x, val, count, x_label="MBTI type"):
+    plt.subplot(2, 1, 1)
+    plt.plot(val, x, "o")
     plt.ylim([0, plt.ylim()[1]])
-    plt.xlabel("MBTI type")
+    plt.xlabel(x_label)
     plt.ylabel("Correct prediction percentage")
-    plt.show()
-    plt.plot(values, counts, "o")
+    plt.subplot(2, 1, 2)
+    plt.plot(val, count, "o")
     plt.ylim([0, plt.ylim()[1]])
-    plt.xlabel("MBTI type")
+    plt.xlabel(x_label)
     plt.ylabel("Number of examples")
+    plt.tight_layout()
     plt.show()
 
 
 def get_processed_data(
-    size: int, preprocess: bool, folder="processed", two_gram: bool = False
+        size: int, preprocess: bool, folder="processed", two_gram: bool = False
 ):
     """Return a preprocessed data set, consisting of comments and types.
     :param size: If preprocess, determine the size of the dataset to process.
     :param preprocess: Determines whether to read from file or preprocess a new dataset.
-    :param folder: Determine the folder within ./data to save to or read from."""
+    :param folder: Determine the folder within ./data to save to or read from.
+    :param two_gram: Toggle two-gram tokens instead of one-gram."""
     print("Loading data...")
     if preprocess:
         types, comments = get_typed_comments(batch_size=int(size / 10), n=size)
@@ -332,18 +362,25 @@ def fit_tokenizer(data, num_words: int = 10000):
     return tokenizer
 
 
+def plot_confusion_matrix(m, labels):
+    cmd = ConfusionMatrixDisplay(m, display_labels=labels)
+    cmd.plot(cmap="binary")
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
     START_TIME = time.time()
     COMMENTS, TYPES = get_processed_data(
-        size=1000, preprocess=False, folder="xp", two_gram=True
+        size=1000, preprocess=False, folder="xp", two_gram=False
     )
 
     # TOKS, TOP_W = tokenize_per_type()
 
-    TOKENIZER = fit_tokenizer(data=COMMENTS)
-    save = False
+    TOKENIZER = fit_tokenizer(data=COMMENTS, num_words=10000)
+    SAVE = False
     # FULL_MODEL = NNFull(save=save)
-    INDIVIDUAL_MODELS = NNIndividual(save=save, epoch=200)
+    INDIVIDUAL_MODELS = NNIndividual(save=SAVE, epoch=200)
     # INDIVIDUAL_MODELS = LGBM(save=save)
 
     X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
@@ -352,9 +389,15 @@ if __name__ == "__main__":
     DIM = None
     # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
     train_model(
-        X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM
+        X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=False, dim=DIM
     )
     Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
-    Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    report(y_pred=Y_PRED, y_true=Y_TEST, dim=DIM)
+    # Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
 
+    # Plot confusion matrix
+    # UNIQUE = np.unique(Y_TRAIN)
+    # STR_Y_PRED = [get_type_from_individual_one_hot(x) for x in Y_PRED]
+    # M = confusion_matrix(Y_TEST, STR_Y_PRED, labels=UNIQUE)
+    # plot_confusion_matrix(M, UNIQUE)
     print("--- %s seconds ---" % (time.time() - START_TIME))
