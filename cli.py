@@ -16,6 +16,7 @@ def init():
     db.initialize_table("typed_posts")
     db.initialize_table("typed_comments")
     db.initialize_table("mbti9k")
+    db.initialize_table("unique_comments")
     db.vacuum_analyze()
     db.close()
 

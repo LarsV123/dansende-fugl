@@ -31,6 +31,10 @@ scripts = {
         "index": "schema/typed_comments_indexes.sql",
         "view": "schema/view_comments.sql",
     },
+    "unique_comments": {
+        "schema": "schema/unique_comments.sql",
+        "index": "schema/unique_comments_indexes.sql"
+    },
     "mbti9k": {
         "data": "data/mbti9k_comments.csv",
         "schema": "schema/mbti9k.sql",
@@ -121,8 +125,10 @@ class Connector:
                 print(
                     f"[bold red]WARNING:[/bold red] {table} contains {row_count} rows"
                 )
-
-        init = click.confirm(f"Do you want to drop and recreate the table '{table}'?")
+        
+            init = click.confirm(f"Do you want to drop and recreate the table '{table}'?")
+        else:
+            init = True
 
         if init or not exists:
             print(f"Initializing schema for '{table}'...")
@@ -138,6 +144,8 @@ class Connector:
                 insert_csv(self, table, 25000)
             elif table == "mbti9k":
                 insert_csv(self, table, 25)
+            elif table == "unique_comments":
+                pass
             else:
                 raise ValueError
             print()
