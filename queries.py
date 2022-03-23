@@ -158,6 +158,7 @@ def query6(db: pg.Connector):
     # print(tabulate(rows, headers=headers))
 
 
+
 def get_user_data(db: pg.Connector, table: str, user: str):
     """
     Get all data for a specific user from a given table.
@@ -209,8 +210,6 @@ if __name__ == "__main__":
 
     # query1_1(db)
     # query1_2(db)
-    # query2(db)
-    # query4(db)
-    query3(db)
+
 
     db.connection.close()
