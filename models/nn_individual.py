@@ -54,16 +54,16 @@ class NNIndividual(Model):
     def build_model(self):
         """Build and return four individual models, meant to predict one of the four axis in mbti each."""
         ie = Individual(
-            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
         )
         sn = Individual(
-            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
         )
         ft = Individual(
-            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
         )
         jp = Individual(
-            layers=[64, 64, 64], dropout=0.2, epochs=200, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
         )
         return [ie, sn, ft, jp]
 
@@ -73,14 +73,20 @@ class NNIndividual(Model):
         model_idx = [i for i in range(len(self.model))]
         if dim:
             model_idx = dim
+        scales = [1, 1, 1, 0.8]
         for i in model_idx:
             print(f"\nTraining on dimension: {dimensions[i]}")
             model = self.model[i]
             labels = y[:, i]
             val, count = np.unique(labels, return_counts=True)
-            weights = {0: 1, 1: count[0] / count[1]}
+            scale = scales[i]
+            if count[0] < count[1]:
+                weights = {0: max(count[1]/count[0]*scale, 1), 1: 1}
+            else:
+                weights = {0: 1, 1: max(count[0] / count[1]*scale, 1)}
             history = model.train(x, labels, verbose, weights)
-            self.plot_metrics(history, dimensions[i])
+            if verbose:
+                self.plot_metrics(history, dimensions[i])
             if self.save:
                 model.model.save(file_path + f"_{dimensions[i]}")
 
