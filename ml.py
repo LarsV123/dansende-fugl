@@ -43,8 +43,8 @@ MBTI_TYPES = [
 class BatchTracker:
     """A simple batch tracker to feed data in batches to a function."""
 
-    def __init__(self, data, batch_size):
-        self.data = data
+    def __init__(self, data_size, batch_size):
+        self.data_size = data_size
         self.batch_size = batch_size
         self.count = 0
         self.complete = False
@@ -55,11 +55,11 @@ class BatchTracker:
             return []
         start = self.count
         end = start + self.batch_size
-        if end >= len(self.data):
-            end = len(self.data)
+        if end >= self.data_size:
+            end = self.data_size
             self.complete = True
         self.count += self.batch_size
-        return self.data[start:end]
+        return [start, end]
 
 
 def get_one_hot(mbti_type: str):
@@ -122,24 +122,26 @@ def remove_stop_words(text):
 
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
-    x_batcher = BatchTracker(data=x, batch_size=batch_size)
-    y_batcher = BatchTracker(data=y, batch_size=batch_size)
+    x_batcher = BatchTracker(data_size=len(x), batch_size=batch_size)
+    y_batcher = BatchTracker(data=len(y), batch_size=batch_size)
     x_batch = x_batcher.get_next_batch()
     y_batch = y_batcher.get_next_batch()
     while len(x_batch):
-        train_x = np.asarray(tkz.texts_to_matrix(x_batch)).astype(np.float32)
-        model.fit(train_x, y_batch, callbacks=tb)
+        train_x = np.asarray(tkz.texts_to_matrix(x[x_batch[0]:x_batch[1]])).astype(np.float32)
+        model.fit(train_x, y[y_batch[0]:y_batch[1]], callbacks=tb)
+        x_batch = x_batcher.get_next_batch()
+        y_batch = y_batcher.get_next_batch()
     return model
 
 
 def evaluate_in_batch(model, tkz, x, y, batch_size):
-    x_batcher = BatchTracker(data=x, batch_size=batch_size)
-    y_batcher = BatchTracker(data=x, batch_size=batch_size)
+    x_batcher = BatchTracker(data_size=len(x), batch_size=batch_size)
+    y_batcher = BatchTracker(data_size=len(y), batch_size=batch_size)
     x_batch = x_batcher.get_next_batch()
     y_batch = y_batcher.get_next_batch()
     while len(x_batch):
-        test_x = np.asarray(tkz.texts_to_matrix(x_batch)).astype(np.float32)
-        model.evaluate(test_x, y_batch)
+        test_x = np.asarray(tkz.texts_to_matrix(x[x_batch[0]:x_batch[1]])).astype(np.float32)
+        model.evaluate(test_x, y[y_batch[0]:y_batch[1]])
         x_batch = x_batcher.get_next_batch()
         y_batch = y_batcher.get_next_batch()
     return model
@@ -205,13 +207,14 @@ def train_model(x, y, tokenizer, model, dim=None, verbose: bool = False):
     func = "get_individual_one_hot"
     if isinstance(model, NNFull):
         func = "get_one_hot"
-    if len(x) > 2000:
-        x_batcher = BatchTracker(data=x, batch_size=1000)
-        y_batcher = BatchTracker(data=y, batch_size=1000)
+    if len(x) > 5000:
+        x_batcher = BatchTracker(data_size=len(x), batch_size=5000)
+        y_batcher = BatchTracker(data_size=len(y), batch_size=5000)
         x_batch = x_batcher.get_next_batch()
         y_batch = y_batcher.get_next_batch()
         while len(x_batch):
-            x_batch, y_batch = convert_to_model_input(x_batch, y_batch, func, tokenizer)
+            x_batch, y_batch = convert_to_model_input(x[x_batch[0]:x_batch[1]], y[y_batch[0]:y_batch[1]], func,
+                                                      tokenizer)
             model.train(x=x_batch, y=y_batch, verbose=verbose, dim=dim)
             x_batch = x_batcher.get_next_batch()
             y_batch = y_batcher.get_next_batch()
@@ -351,13 +354,13 @@ def fit_tokenizer(data, num_words: int = 10000):
     """Generate a tokenizer from the given data.
     :param num_words: Only use top words when converting to matrix."""
     tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words)
-    comment_batcher = BatchTracker(data=data, batch_size=int(len(data) / 10))
+    comment_batcher = BatchTracker(data_size=len(data), batch_size=int(len(data) / 10))
     batch = comment_batcher.get_next_batch()
     count = 0
     while len(batch):
         print(f"Tokenizer fitting batch on {count}")
         count += 1
-        tokenizer.fit_on_texts(batch)
+        tokenizer.fit_on_texts(data[batch[0]:batch[1]])
         batch = comment_batcher.get_next_batch()
     return tokenizer
 
