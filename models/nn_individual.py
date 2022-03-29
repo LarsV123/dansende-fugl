@@ -1,4 +1,5 @@
 from typing import List
+import tensorflow
 from keras import Sequential
 from keras.layers import Dense, Dropout
 from models.model import Model
@@ -12,13 +13,14 @@ class Individual:
         self, layers: List[int], dropout: float, batch_size: int = 32, epochs: int = 20
     ):
         model = Sequential()
+        optimizer = tensorflow.keras.optimizers.Adam(learning_rate=1e-4)
         for i in layers:
             model.add(Dense(i, activation="relu", kernel_regularizer="L2"))
             model.add(Dropout(dropout))
         model.add(Dense(1, activation="sigmoid"))
         model.compile(
             loss="binary_crossentropy",
-            optimizer="adam",
+            optimizer=optimizer,
             metrics=[
                 "mean_squared_error",
                 AUC(name="auc"),
@@ -54,16 +56,16 @@ class NNIndividual(Model):
     def build_model(self):
         """Build and return four individual models, meant to predict one of the four axis in mbti each."""
         ie = Individual(
-            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.6, epochs=40, batch_size=self.batch_size
         )
         sn = Individual(
-            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.6, epochs=50, batch_size=self.batch_size
         )
         ft = Individual(
-            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.6, epochs=50, batch_size=self.batch_size
         )
         jp = Individual(
-            layers=[128, 128, 128], dropout=0.4, epochs=10, batch_size=self.batch_size
+            layers=[128, 128, 128], dropout=0.6, epochs=35, batch_size=self.batch_size
         )
         return [ie, sn, ft, jp]
 
@@ -73,7 +75,7 @@ class NNIndividual(Model):
         model_idx = [i for i in range(len(self.model))]
         if dim:
             model_idx = dim
-        scales = [1, 1, 1, 0.8]
+        scales = [2, 2, 1, 1]
         for i in model_idx:
             print(f"\nTraining on dimension: {dimensions[i]}")
             model = self.model[i]
