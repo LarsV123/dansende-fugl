@@ -18,3 +18,6 @@ data
 
 # R 
 .Rhistory
+
+# VS Code settings
+.vscode/
