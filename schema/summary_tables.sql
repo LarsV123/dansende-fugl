@@ -10,18 +10,6 @@ SELECT mbti,
 FROM unique_comments
 GROUP BY mbti
 ORDER BY mbti DESC;
--- Unique version
-DROP TABLE IF EXISTS unique_comments_per_mbti;
-CREATE TABLE unique_comments_per_mbti AS
-SELECT mbti,
-  COUNT(*) AS mbti_comment_count,
-  COUNT(*) * 1.0 / (
-    SELECT COUNT(*)
-    FROM unique_comments
-  ) AS share
-FROM unique_comments
-GROUP BY mbti
-ORDER BY mbti DESC;
 -- Posts per MBTI type
 DROP TABLE IF EXISTS posts_per_mbti;
 CREATE TABLE posts_per_mbti AS
@@ -40,16 +28,6 @@ CREATE TABLE top_subreddits_mbti AS (
 );
 DROP TABLE IF EXISTS top_subreddits CASCADE;
 CREATE TABLE top_subreddits AS (
-  SELECT subreddit,
-    COUNT(*) AS comment_count
-  FROM unique_comments
-  WHERE NOT is_mbti_related
-  GROUP BY subreddit
-  ORDER BY comment_count DESC
-  LIMIT 25
-);
-DROP TABLE IF EXISTS top_unique_subreddits CASCADE;
-CREATE TABLE top_unique_subreddits AS (
   SELECT subreddit,
     COUNT(*) AS comment_count
   FROM unique_comments
@@ -85,7 +63,7 @@ SELECT subreddit,
 FROM unique_comments
 WHERE subreddit IN (
     SELECT subreddit
-    FROM top_unique_subreddits
+    FROM top_subreddits
   )
 GROUP BY subreddit,
   mbti;
@@ -99,7 +77,7 @@ SELECT author,
 FROM unique_comments
 WHERE subreddit IN (
     SELECT subreddit
-    FROM top_unique_subreddits
+    FROM top_subreddits
   )
 GROUP BY author,
   subreddit,
