@@ -1,3 +1,4 @@
+import copy
 import sqlite3
 import time
 import nltk
@@ -249,10 +250,12 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
 
     # Calculate prediction percentage of each individual class and in total, also plot.
     if dim:
-        for i in dim:
-            for j in range(len(y_true)):
-                temp.append([y_true[j, i]])
-        y_true = temp
+        y_true = copy.copy(y_true)
+        for j in range(len(y_true)):
+            temp = ""
+            for i in dim:
+                temp += y_true[j][i]
+            y_true[j] = temp
     y_pred = [get_type_from_individual_one_hot(encoding, dim) for encoding in y_pred]
     values, counts = np.unique(y_true, return_counts=True, axis=0)
     ind_val, ind_counts = np.unique([[list(word) for word in x] for x in y_true], return_counts=True)
@@ -385,10 +388,30 @@ def plot_confusion_matrix(m, labels):
     plt.show()
 
 
+def similar_type(type_string: str, dim, tokenizer, model, comments, types):
+    """ Train and report results when trained on only two specific types that differ in one axis. Also
+     report results on unseen personality type in the differing axis. """
+    cond = [type_string in x for x in TYPES]
+    x_train, x_test, y_train, y_test = train_test_split(
+        comments[cond], types[cond], test_size=0.25, random_state=1, stratify=None
+    )
+    train_model(
+        x_train, y_train, tokenizer, model=model, verbose=True, dim=dim
+    )
+
+    # Show results on test set for trained personality types
+    y_pred = predict(x_test, y_test, model, tokenizer, dim=dim)
+    report(y_pred=y_pred, y_true=y_test, dim=dim)
+
+    # Show results on unseen personality types
+    y_pred = predict(COMMENTS[np.invert(cond)], TYPES[np.invert(cond)], model, tokenizer, dim=dim)
+    report(y_pred=y_pred, y_true=TYPES[np.invert(cond)], dim=dim)
+
+
 if __name__ == "__main__":
     START_TIME = time.time()
     COMMENTS, TYPES = get_processed_data(
-        size=1000, preprocess=False, folder="xp", two_gram=False
+        size=1000, preprocess=False, folder="test", two_gram=False
     )
 
     # TOKS, TOP_W = tokenize_per_type()
@@ -396,24 +419,26 @@ if __name__ == "__main__":
     TOKENIZER = fit_tokenizer(data=COMMENTS, num_words=10000)
     SAVE = False
     # FULL_MODEL = NNFull(save=save)
+
     INDIVIDUAL_MODELS = NNIndividual(save=SAVE, epoch=200)
     # INDIVIDUAL_MODELS = LGBM(save=save)
 
-    X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
-        COMMENTS, TYPES, test_size=0.25, random_state=1, stratify=None
-    )
-    DIM = None
-    # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
-    train_model(
-        X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=False, dim=DIM
-    )
-    Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
-    report(y_pred=Y_PRED, y_true=Y_TEST, dim=DIM)
-    # Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    similar_type("nfp", [0], TOKENIZER, INDIVIDUAL_MODELS, COMMENTS, TYPES)
 
-    # Plot confusion matrix
-    # UNIQUE = np.unique(Y_TRAIN)
-    # STR_Y_PRED = [get_type_from_individual_one_hot(x) for x in Y_PRED]
-    # M = confusion_matrix(Y_TEST, STR_Y_PRED, labels=UNIQUE)
-    # plot_confusion_matrix(M, UNIQUE)
+    # X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(
+    #     COMMENTS, TYPES, test_size=0.25, random_state=1, stratify=None
+    # )
+    # DIM = None
+    # # train_model(x_train, y_train, TOKENIZER, model=FULL_MODEL)
+    # train_model(
+    #     X_TRAIN, Y_TRAIN, TOKENIZER, model=INDIVIDUAL_MODELS, verbose=True, dim=DIM
+    # )
+    # Y_PRED = predict(X_TEST, Y_TEST, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    # report(y_pred=Y_PRED, y_true=Y_TEST, dim=DIM)
+    # # Y_PRED = predict(X_TRAIN, Y_TRAIN, INDIVIDUAL_MODELS, TOKENIZER, dim=DIM)
+    # # Plot confusion matrix
+    # # UNIQUE = np.unique(Y_TRAIN)
+    # # STR_Y_PRED = [get_type_from_individual_one_hot(x) for x in Y_PRED]
+    # # M = confusion_matrix(Y_TEST, STR_Y_PRED, labels=UNIQUE)
+    # # plot_confusion_matrix(M, UNIQUE)
     print("--- %s seconds ---" % (time.time() - START_TIME))
