@@ -15,7 +15,7 @@ CREATE VIEW comments_ax AS (
 CREATE TEMP TABLE total_comments_per_mbti AS (
   SELECT mbti,
     COUNT(*) AS total_comments
-  FROM comments
+  FROM unique_comments
   GROUP BY mbti
 );
 CREATE TEMP TABLE temp_comments_per_hour AS (
@@ -25,10 +25,11 @@ CREATE TEMP TABLE temp_comments_per_hour AS (
       FROM to_timestamp(created_utc)
     ) AS hour,
     COUNT(*) AS comments_per_hour
-  FROM comments
+  FROM unique_comments
   GROUP BY mbti,
     hour
 );
+DROP TABLE IF EXISTS comments_per_hour;
 CREATE TABLE comments_per_hour AS (
   SELECT mbti,
     comments_per_hour,
