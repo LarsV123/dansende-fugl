@@ -14,7 +14,7 @@ from models.nn_full import NNFull
 from models.nn_individual import NNIndividual
 import matplotlib.pyplot as plt
 from models.lgbm import LGBM
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
 
 nltk.download("punkt")
 nltk.download("stopwords")
@@ -234,7 +234,20 @@ def predict(x, y, model, tokenizer, dim=None):
 
 def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
     """Generate plots showing the prediction accuracy on the given data."""
-    temp = []
+    # Calculate f1 score and plot
+    f1 = []
+    one_hot_y_true = np.array([get_individual_one_hot(ind_type) for ind_type in y_true])
+    for i in range(len(y_pred[0])):
+        one_axis_pred = y_pred[:, i]
+        one_axis_true = one_hot_y_true[:, i]
+        temp = f1_score(one_axis_true, one_axis_pred, average="macro")
+        f1.append(temp)
+    plt.plot(["I-E"], f1, "o")
+    plt.xlabel("MBTI axis")
+    plt.ylabel("Macro F1-score")
+    plt.show()
+
+    # Calculate prediction percentage of each individual class and in total, also plot.
     if dim:
         for i in dim:
             for j in range(len(y_true)):
