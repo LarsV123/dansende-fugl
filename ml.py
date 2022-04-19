@@ -11,6 +11,8 @@ import re
 from keras.models import Sequential
 from spellchecker import SpellChecker
 from sklearn.model_selection import train_test_split
+
+from models.baseline import Baseline
 from models.nn_full import NNFull
 from models.nn_individual import NNIndividual
 import matplotlib.pyplot as plt
@@ -124,7 +126,7 @@ def remove_stop_words(text):
 
 def train_in_batch(model, tkz, x, y, batch_size, tb=None):
     x_batcher = BatchTracker(data_size=len(x), batch_size=batch_size)
-    y_batcher = BatchTracker(data=len(y), batch_size=batch_size)
+    y_batcher = BatchTracker(data_size=len(y), batch_size=batch_size)
     x_batch = x_batcher.get_next_batch()
     y_batch = y_batcher.get_next_batch()
     while len(x_batch):
@@ -208,20 +210,25 @@ def train_model(x, y, tokenizer, model, dim=None, verbose: bool = False):
     func = "get_individual_one_hot"
     if isinstance(model, NNFull):
         func = "get_one_hot"
-    if len(x) > 5000:
-        x_batcher = BatchTracker(data_size=len(x), batch_size=5000)
-        y_batcher = BatchTracker(data_size=len(y), batch_size=5000)
+    if len(x) > 2000:
+        x_batcher = BatchTracker(data_size=len(x), batch_size=2000)
+        y_batcher = BatchTracker(data_size=len(y), batch_size=2000)
         x_batch = x_batcher.get_next_batch()
         y_batch = y_batcher.get_next_batch()
+        x_input = []
+        y_input = []
         while len(x_batch):
             x_batch, y_batch = convert_to_model_input(x[x_batch[0]:x_batch[1]], y[y_batch[0]:y_batch[1]], func,
                                                       tokenizer)
-            model.train(x=x_batch, y=y_batch, verbose=verbose, dim=dim)
+            x_input.append(x_batch)
+            y_input.append(y_batch)
             x_batch = x_batcher.get_next_batch()
             y_batch = y_batcher.get_next_batch()
+        x_input = np.vstack(x_input)
+        y_input = np.vstack(y_input)
     else:
-        x, y = convert_to_model_input(x, y, func, tokenizer)
-        model.train(x, y, verbose=verbose, dim=dim)
+        x_input, y_input = convert_to_model_input(x, y, func, tokenizer)
+    model.train(x_input, y_input, verbose=verbose, dim=dim)
 
 
 def predict(x, y, model, tokenizer, dim=None):
@@ -239,11 +246,20 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
     f1 = []
     one_hot_y_true = np.array([get_individual_one_hot(ind_type) for ind_type in y_true])
     for i in range(len(y_pred[0])):
+        idx = i
+        if dim:
+            idx = dim[i]
         one_axis_pred = y_pred[:, i]
-        one_axis_true = one_hot_y_true[:, i]
+        one_axis_true = one_hot_y_true[:, idx]
         temp = f1_score(one_axis_true, one_axis_pred, average="macro")
         f1.append(temp)
-    plt.plot(["I-E"], f1, "o")
+    plot_axis = ["I-E", "S-N", "F-T", "J-P"]
+    if dim:
+        temp = []
+        for idx in dim:
+            temp.append(plot_axis[idx])
+        plot_axis = temp
+    plt.plot(plot_axis, f1, "o")
     plt.xlabel("MBTI axis")
     plt.ylabel("Macro F1-score")
     plt.show()
@@ -295,6 +311,7 @@ def report(y_pred: np.ndarray, y_true: np.ndarray, dim):
         else:
             x.append(0)
     plot_predictions(x, ind_val, ind_counts, x_label="MBTI axis")
+    return f1
 
 
 def plot_predictions(x, val, count, x_label="MBTI type"):
@@ -383,7 +400,7 @@ def fit_tokenizer(data, num_words: int = 10000):
 
 def plot_confusion_matrix(m, labels):
     cmd = ConfusionMatrixDisplay(m, display_labels=labels)
-    cmd.plot(cmap="binary")
+    cmd.plot(cmap="binary_r")
     plt.tight_layout()
     plt.show()
 
