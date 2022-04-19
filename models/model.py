@@ -4,7 +4,7 @@ import numpy as np
 
 class Model(ABC):
     def __init__(
-        self, save: bool, file_path: str, epoch: int = 10, batch_size: int = 32
+        self, save: bool, file_path: str, epoch: int = 10, batch_size: int = 32, retrain=True
     ):
         self.save = save
         self.batch_size = batch_size
@@ -12,6 +12,7 @@ class Model(ABC):
         self.file_path = file_path
         self.epoch = epoch
         self.history = None
+        self.retrain = retrain
 
     @abstractmethod
     def build_model(self):
