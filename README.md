@@ -1,6 +1,8 @@
 # Dansende fugl
 
-TMA4851 - Repo for EiT group "Dansende Fugl"
+This repository holds the code used by our group ("Dansende fugl") for the course "TMA4851 - Experts in Teamwork - Data deluge - what can we learn from an abundance of data?" in 2022.
+The code was used to generate the results used in our reports for the course.
+Our project used a data set provided by Matej Gjurković and Jan Šnajder (https://takelab.fer.hr/data/mbti/).
 
 ## Contributors
 
